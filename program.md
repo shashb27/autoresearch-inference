@@ -35,7 +35,7 @@ Each experiment runs on a single GPU. The inference benchmark runs for a **fixed
 
 **The goal is simple: get the highest tok_s.** Since the benchmark is fixed (same prompts, same token count), you don't need to worry about evaluation variance. Everything is fair game: change how the model loads, compiles, quantizes, generates. The only constraint is that the code runs without crashing and produces valid output.
 
-**VRAM** must stay under 31 GB peak. Experiments exceeding this are discarded.
+**VRAM** must stay under 90 GB peak. Experiments exceeding this are discarded.
 
 **Simplicity criterion**: All else being equal, simpler is better. A small improvement that adds ugly complexity is not worth it. Removing code while maintaining or improving tok_s is a great outcome.
 
@@ -142,7 +142,7 @@ LOOP FOREVER:
 - **PRIMARY metric**: tok_s (higher is better)
 - **KEEP** if tok_s improves by any amount
 - **DISCARD** if tok_s stays same or decreases
-- **DISCARD** if peak_vram_gb > 31.0
+- **DISCARD** if peak_vram_gb > 90.0
 - **CRASH** if benchmark fails or produces invalid output (>20% invalid outputs)
 - **TIE-BREAKER**: prefer lower peak_vram_gb, then lower ttft_ms
 - **SIMPLICITY**: all else equal, simpler code wins

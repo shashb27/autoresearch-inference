@@ -58,7 +58,7 @@ def load_model():
 
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
-        torch_dtype=DTYPE,
+        dtype=DTYPE,
         device_map=DEVICE,
         attn_implementation=ATTENTION_IMPLEMENTATION,
     )
@@ -111,6 +111,7 @@ def make_generate_fn(model, tokenizer):
             do_sample=False,
             temperature=None,
             top_p=None,
+            pad_token_id=tokenizer.eos_token_id,
         )
         return output
 

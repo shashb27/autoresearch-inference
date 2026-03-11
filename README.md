@@ -15,7 +15,7 @@ The agent modifies `infer.py`, runs `uv run infer.py`, checks if tok/s improved,
 ## Target
 
 - **Model**: Qwen 2.5 7B
-- **Hardware**: NVIDIA RTX 5090 (32GB GDDR7)
+- **Hardware**: NVIDIA RTX PRO 6000 Blackwell (96GB GDDR7)
 - **Metric**: tokens/second (higher is better)
 - **Agent**: Claude Code running autonomously on the GPU machine
 
