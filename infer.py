@@ -9,17 +9,38 @@ quantization, torch.compile settings, memory management, etc.
 Constraint: Must expose run_inference() that returns (generate_fn, tokenizer)
 compatible with prepare.benchmark().
 
+Configuration is read from config.json (written by prepare.py).
 Usage: uv run infer.py
 """
 
 import os
 import gc
+import json
 import time
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from prepare import MODEL_ID, MAX_NEW_TOKENS, DEVICE, CACHE_DIR, benchmark
+from prepare import benchmark
+
+# ============================================================
+# SECTION 0: Runtime Config (from config.json)
+# ============================================================
+
+_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+
+def _load_config():
+    if os.path.exists(_CONFIG_PATH):
+        with open(_CONFIG_PATH) as f:
+            return json.load(f)
+    return {}
+
+_CFG = _load_config()
+
+DEVICE = _CFG.get("device", "cuda")
+MODEL_PATH = _CFG.get("model_path", os.path.join(
+    os.path.expanduser("~"), ".cache", "autoresearch-inference", "model"))
+MAX_NEW_TOKENS = _CFG.get("max_new_tokens", 256)
 
 # ============================================================
 # SECTION 1: Configuration & Hyperparameters
@@ -31,7 +52,7 @@ ATTENTION_IMPLEMENTATION = "sdpa"   # "sdpa", "flash_attention_2", "eager"
 
 # Compilation
 USE_TORCH_COMPILE = True
-COMPILE_MODE = "max-autotune"       # "default", "reduce-overhead", "max-autotune"
+COMPILE_MODE = "default"            # "default", "reduce-overhead", "max-autotune"
 COMPILE_BACKEND = "inductor"
 
 # Quantization
@@ -54,10 +75,8 @@ EMPTY_CACHE_BEFORE_BENCHMARK = True
 
 def load_model():
     """Load and configure the model for inference."""
-    model_path = os.path.join(CACHE_DIR, "model")
-
     model = AutoModelForCausalLM.from_pretrained(
-        model_path,
+        MODEL_PATH,
         dtype=DTYPE,
         device_map=DEVICE,
         attn_implementation=ATTENTION_IMPLEMENTATION,
@@ -68,9 +87,7 @@ def load_model():
 
 def load_tokenizer():
     """Load the tokenizer."""
-    model_path = os.path.join(CACHE_DIR, "model")
-
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     return tokenizer
