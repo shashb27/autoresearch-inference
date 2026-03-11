@@ -295,7 +295,7 @@ def run_profile(generate_fn, tokenizer):
     for _ in range(2):
         generate_fn(input_ids)
     if torch.cuda.is_available():
-        torch.cuda.synchronize()
+        torch.cuda.synchronize(DEVICE)
 
     print("Profiling...")
     with profile(
@@ -305,7 +305,7 @@ def run_profile(generate_fn, tokenizer):
     ) as prof:
         generate_fn(input_ids)
         if torch.cuda.is_available():
-            torch.cuda.synchronize()
+            torch.cuda.synchronize(DEVICE)
 
     # Write profile
     path = os.path.join(PROJECT_DIR, "profile.txt")
@@ -315,7 +315,7 @@ def run_profile(generate_fn, tokenizer):
         f.write("=== Profiler Output (sorted by CUDA time) ===\n\n")
         f.write(table)
         if torch.cuda.is_available():
-            peak = torch.cuda.max_memory_allocated() / 1024**3
+            peak = torch.cuda.max_memory_allocated(DEVICE) / 1024**3
             f.write(f"\nPeak GPU memory: {peak:.1f} GB\n")
 
     print(f"Wrote {path}")
@@ -342,7 +342,7 @@ def benchmark(generate_fn, tokenizer):
     prompts = load_prompts()
 
     if torch.cuda.is_available():
-        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.reset_peak_memory_stats(DEVICE)
 
     # --- Warmup ---
     print(f"Running {NUM_WARMUP_RUNS} warmup iterations...")
@@ -351,7 +351,7 @@ def benchmark(generate_fn, tokenizer):
     for _ in range(NUM_WARMUP_RUNS):
         _ = generate_fn(warmup_ids)
     if torch.cuda.is_available():
-        torch.cuda.synchronize()
+        torch.cuda.synchronize(DEVICE)
     print("Warmup complete.")
     print()
 
@@ -368,12 +368,12 @@ def benchmark(generate_fn, tokenizer):
         input_length = input_ids.shape[1]
 
         if torch.cuda.is_available():
-            torch.cuda.synchronize()
+            torch.cuda.synchronize(DEVICE)
 
         t_start = time.perf_counter()
         output_ids = generate_fn(input_ids)
         if torch.cuda.is_available():
-            torch.cuda.synchronize()
+            torch.cuda.synchronize(DEVICE)
         t_end = time.perf_counter()
 
         gen_time = t_end - t_start
@@ -407,7 +407,7 @@ def benchmark(generate_fn, tokenizer):
 
     peak_vram_gb = 0.0
     if torch.cuda.is_available():
-        peak_vram_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+        peak_vram_gb = torch.cuda.max_memory_allocated(DEVICE) / (1024 ** 3)
 
     results = {
         "tok_s": tok_s,
