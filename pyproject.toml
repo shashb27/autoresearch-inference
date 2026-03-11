@@ -1,0 +1,20 @@
+[project]
+name = "autoresearch-inference"
+version = "0.1.0"
+description = "Autonomous LLM inference optimization research"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.5",
+    "transformers>=4.46",
+    "accelerate>=1.0",
+    "torchao>=0.7",
+    "huggingface-hub>=0.26",
+]
+
+[project.optional-dependencies]
+analysis = [
+    "jupyter",
+    "matplotlib>=3.10",
+    "pandas>=2.2",
+]

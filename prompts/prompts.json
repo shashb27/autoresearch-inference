@@ -1,0 +1,106 @@
+{
+  "description": "Fixed benchmark prompts for autoresearch-inference. DO NOT MODIFY.",
+  "max_new_tokens": 256,
+  "prompts": [
+    {
+      "id": 1,
+      "category": "short",
+      "text": "The capital of France is"
+    },
+    {
+      "id": 2,
+      "category": "short",
+      "text": "def fibonacci(n):"
+    },
+    {
+      "id": 3,
+      "category": "short",
+      "text": "In a galaxy far, far away,"
+    },
+    {
+      "id": 4,
+      "category": "short",
+      "text": "The speed of light in a vacuum is approximately"
+    },
+    {
+      "id": 5,
+      "category": "short",
+      "text": "To sort an array in Python, you can"
+    },
+    {
+      "id": 6,
+      "category": "medium",
+      "text": "Explain the difference between TCP and UDP networking protocols. TCP is a connection-oriented protocol that provides reliable, ordered delivery of data between applications. UDP, on the other hand,"
+    },
+    {
+      "id": 7,
+      "category": "medium",
+      "text": "Write a Python function that implements binary search on a sorted array. The function should take a sorted list and a target value as parameters, and return the index of the target if found, or -1 if not present."
+    },
+    {
+      "id": 8,
+      "category": "medium",
+      "text": "The theory of general relativity, proposed by Albert Einstein in 1915, fundamentally changed our understanding of gravity. Rather than treating gravity as a force between masses, Einstein described it as"
+    },
+    {
+      "id": 9,
+      "category": "medium",
+      "text": "Describe the process of photosynthesis in plants. Start from the absorption of light energy by chlorophyll molecules in the thylakoid membranes, and explain how this energy is used to convert carbon dioxide and water"
+    },
+    {
+      "id": 10,
+      "category": "medium",
+      "text": "Compare and contrast the architectural patterns of monolithic applications versus microservices. Consider aspects such as deployment complexity, scalability, team organization, data management, and fault isolation."
+    },
+    {
+      "id": 11,
+      "category": "medium",
+      "text": "The Industrial Revolution began in Britain in the late 18th century and marked a major turning point in human history. Before the revolution, most people lived in rural communities and made their living from agriculture."
+    },
+    {
+      "id": 12,
+      "category": "medium",
+      "text": "Implement a simple linked list class in Python with the following methods: append, prepend, delete, find, and display. The linked list should support storing any type of data in its nodes."
+    },
+    {
+      "id": 13,
+      "category": "medium",
+      "text": "Quantum computing represents a fundamentally different approach to computation compared to classical computers. While classical bits can only be in a state of 0 or 1, quantum bits or qubits can exist in a superposition"
+    },
+    {
+      "id": 14,
+      "category": "medium",
+      "text": "Design a RESTful API for a simple blog platform. The API should support creating, reading, updating, and deleting blog posts. Each post has a title, body, author, creation date, and tags."
+    },
+    {
+      "id": 15,
+      "category": "medium",
+      "text": "The human immune system is a complex network of cells, tissues, and organs that work together to defend the body against harmful pathogens. The immune response can be broadly classified into two types:"
+    },
+    {
+      "id": 16,
+      "category": "long",
+      "text": "Machine learning is a subset of artificial intelligence that focuses on building systems that can learn from and make decisions based on data. There are three main types of machine learning: supervised learning, unsupervised learning, and reinforcement learning. In supervised learning, the algorithm is trained on labeled data, where each training example is paired with an output label. The algorithm learns a mapping function from the input to the output, and this mapping is used to predict labels for new, unseen data. Common supervised learning algorithms include linear regression, logistic regression, decision trees, random forests, support vector machines, and neural networks. The choice of algorithm depends on the nature of the problem, the size and quality of the dataset, and the desired trade-off between interpretability and accuracy. Explain the key differences between these algorithms and when you would choose each one."
+    },
+    {
+      "id": 17,
+      "category": "long",
+      "text": "The history of computing can be traced back to ancient civilizations that developed mechanical devices for counting and calculation. The abacus, invented around 2400 BC, was one of the earliest computing tools. In the 17th century, Blaise Pascal and Gottfried Wilhelm Leibniz created mechanical calculators that could perform basic arithmetic operations. Charles Babbage designed the Analytical Engine in the 1830s, which is considered the first general-purpose computer design. Ada Lovelace wrote what is recognized as the first computer program for this machine. The modern era of computing began in the 1940s with electronic computers like ENIAC and UNIVAC. The invention of the transistor in 1947, followed by the integrated circuit in 1958, led to increasingly powerful and smaller computers. The development of microprocessors in the 1970s made personal computing possible. Describe how each of these milestones contributed to modern computing architecture."
+    },
+    {
+      "id": 18,
+      "category": "long",
+      "text": "Climate change is one of the most pressing challenges facing humanity in the 21st century. The Earth's average temperature has risen by approximately 1.1 degrees Celsius since the pre-industrial era, primarily due to human activities that release greenhouse gases into the atmosphere. The burning of fossil fuels for energy, deforestation, and industrial processes are the main contributors to this increase. The effects of climate change are wide-ranging and include rising sea levels, more frequent and intense extreme weather events, changes in precipitation patterns, loss of biodiversity, and threats to food security. The Paris Agreement, adopted in 2015, aims to limit global warming to well below 2 degrees Celsius above pre-industrial levels, with efforts to limit it to 1.5 degrees. Achieving these goals requires a fundamental transformation of our energy systems, land use practices, and industrial processes. Analyze the most promising technological and policy solutions for addressing climate change."
+    },
+    {
+      "id": 19,
+      "category": "long",
+      "text": "Database systems are fundamental to modern software applications, providing structured storage and efficient retrieval of data. Relational databases, based on the relational model proposed by Edgar F. Codd in 1970, organize data into tables with rows and columns, and use SQL for data manipulation. Popular relational databases include PostgreSQL, MySQL, Oracle, and SQL Server. NoSQL databases emerged in the late 2000s to address limitations of relational databases in handling large volumes of unstructured or semi-structured data. There are several categories of NoSQL databases: document stores like MongoDB, key-value stores like Redis, column-family stores like Cassandra, and graph databases like Neo4j. Each type is optimized for specific use cases. More recently, NewSQL databases like CockroachDB and Google Spanner have attempted to combine the scalability of NoSQL with the ACID guarantees of relational databases. Compare these database paradigms in terms of consistency, scalability, query flexibility, and appropriate use cases."
+    },
+    {
+      "id": 20,
+      "category": "long",
+      "text": "The field of natural language processing has undergone a dramatic transformation in recent years, driven primarily by the development of transformer-based neural network architectures. The original transformer model, introduced in the paper 'Attention Is All You Need' by Vaswani et al. in 2017, replaced recurrent neural networks with a self-attention mechanism that could process all positions in a sequence simultaneously. This architecture became the foundation for a series of increasingly powerful language models. BERT, introduced by Google in 2018, demonstrated the effectiveness of bidirectional pre-training for understanding language. GPT, developed by OpenAI, showed that autoregressive language models could generate coherent and contextually appropriate text. The scaling laws discovered through training these models revealed that performance improves predictably with increases in model size, training data, and compute. These findings led to the development of large language models with hundreds of billions of parameters. Discuss how transformer architecture and scaling have shaped the current state of AI and what challenges remain."
+    }
+  ]
+}
