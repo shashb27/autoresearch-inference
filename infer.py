@@ -56,8 +56,8 @@ COMPILE_MODE = "default"            # "default", "reduce-overhead", "max-autotun
 COMPILE_BACKEND = "inductor"
 
 # Quantization
-QUANTIZATION_ENABLED = False
-QUANTIZATION_TYPE = None            # "int8", "int4", "fp8", "nf4"
+QUANTIZATION_ENABLED = True
+QUANTIZATION_TYPE = "int8"          # "int8", "int4", "fp8", "nf4"
 
 # Generation
 USE_STATIC_CACHE = False
@@ -99,6 +99,19 @@ def load_tokenizer():
 
 def optimize_model(model):
     """Apply post-load optimizations to the model."""
+    # Apply quantization first (before compile)
+    if QUANTIZATION_ENABLED:
+        if QUANTIZATION_TYPE == "int8":
+            from torchao.quantization import quantize_, int8_weight_only
+            print(f"Applying INT8 weight-only quantization...")
+            quantize_(model, int8_weight_only())
+        elif QUANTIZATION_TYPE == "int4":
+            from torchao.quantization import quantize_, int4_weight_only
+            print(f"Applying INT4 weight-only quantization...")
+            quantize_(model, int4_weight_only())
+        else:
+            print(f"Warning: Quantization type '{QUANTIZATION_TYPE}' not supported")
+
     if USE_TORCH_COMPILE:
         model = torch.compile(
             model,
