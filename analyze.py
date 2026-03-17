@@ -110,8 +110,10 @@ def plot_tok_s_progression(df: pd.DataFrame, out_dir: str, show: bool):
     ax.plot(df["experiment_num"], best_so_far,
             color=BEST_LINE_COLOR, linewidth=2, label="Best tok/s so far", zorder=2)
 
-    # All experiments
+    # All experiments (skip crash here — plotted separately at bottom with correct y)
     for status, grp in df.groupby("status"):
+        if status == "crash":
+            continue
         ax.scatter(grp["experiment_num"], grp["tok_s"],
                    c=STATUS_COLORS.get(status, "#8b949e"),
                    s=55, zorder=3, label=status)
@@ -131,6 +133,20 @@ def plot_tok_s_progression(df: pd.DataFrame, out_dir: str, show: bool):
             )
         if row["tok_s"] > prev_best:
             prev_best = row["tok_s"]
+
+    # Exclude crash (tok_s == 0) from y-axis range so they don't compress the scale
+    non_crash = df[df["tok_s"] > 0]["tok_s"]
+    if not non_crash.empty:
+        y_min = max(0, non_crash.min() * 0.97)
+        y_max = non_crash.max() * 1.12
+        ax.set_ylim(y_min, y_max)
+        # Pin crashes to a narrow band at the very bottom with a distinct marker
+        crashes = df[df["tok_s"] == 0]
+        if not crashes.empty:
+            crash_y = y_min + (y_max - y_min) * 0.015
+            ax.scatter(crashes["experiment_num"], [crash_y] * len(crashes),
+                       c=STATUS_COLORS["crash"], s=70, marker="X", zorder=4, label="crash",
+                       edgecolors="#ffffff", linewidths=0.5)
 
     ax.set_xlabel("Experiment #")
     ax.set_ylabel("tok/s")
@@ -158,21 +174,30 @@ def plot_vram_vs_toks(df: pd.DataFrame, out_dir: str, show: bool):
                    c=STATUS_COLORS.get(status, "#8b949e"),
                    alpha=0.75, s=60, label=status)
 
-    # Label kept experiments
-    keeps = valid[valid["status"] == "keep"]
-    for _, row in keeps.iterrows():
+    # Number the kept points and show a legend below to avoid label overlap
+    keeps = valid[valid["status"] == "keep"].reset_index(drop=True)
+    for i, (_, row) in enumerate(keeps.iterrows()):
         ax.annotate(
-            row["description"][:22],
+            str(i + 1),
             xy=(row["peak_vram_gb"], row["tok_s"]),
-            xytext=(5, 3), textcoords="offset points",
-            fontsize=7, color="#c9d1d9",
+            xytext=(4, 4), textcoords="offset points",
+            fontsize=8, fontweight="bold", color="#f0e68c",
         )
+
+    # Legend table below the chart
+    legend_lines = [f"  {i+1}. {row['description'][:50]}"
+                    for i, (_, row) in enumerate(keeps.iterrows())]
+    legend_text = "\n".join(legend_lines)
+    fig.text(0.01, -0.04 * max(1, len(keeps) // 3), legend_text,
+             fontsize=7, color="#8b949e", va="top",
+             transform=ax.transAxes)
 
     ax.set_xlabel("Peak VRAM (GB)")
     ax.set_ylabel("tok/s")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.4)
     fig.tight_layout()
+    fig.subplots_adjust(bottom=0.05 + 0.04 * len(keeps))
     _save(fig, out_dir, "vram_vs_toks.png", show)
 
 
@@ -196,9 +221,10 @@ def plot_improvement_deltas(df: pd.DataFrame, out_dir: str, show: bool):
               for g in keeps["pct_gain"]]
     ax.bar(range(len(keeps)), keeps["pct_gain"], color=colors, width=0.6)
     ax.set_xticks(range(len(keeps)))
+    # Use full description but wrap long ones; rotation+alignment for readability
     ax.set_xticklabels(
-        [d[:28] for d in keeps["description"]],
-        rotation=38, ha="right", fontsize=8,
+        [d[:40] for d in keeps["description"]],
+        rotation=42, ha="right", fontsize=7.5,
     )
     ax.axhline(0, color="#8b949e", linewidth=0.9, linestyle="--")
 
@@ -255,21 +281,25 @@ def plot_ttft_progression(df: pd.DataFrame, out_dir: str, show: bool):
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(13, 7), sharex=True)
     fig.suptitle("Throughput vs Latency — Kept Experiments", fontweight="bold")
 
-    ax1.plot(keeps["experiment_num"], keeps["tok_s"],
+    # Use sequential indices so spacing is even (original exp numbers can be sparse)
+    x = list(range(1, len(keeps) + 1))
+    xlabels = [d[:22] for d in keeps["description"]]
+
+    ax1.plot(x, keeps["tok_s"].values,
              "o-", color=STATUS_COLORS["keep"], linewidth=2, markersize=6, label="tok/s")
-    ax1.fill_between(keeps["experiment_num"], keeps["tok_s"],
-                     alpha=0.15, color=STATUS_COLORS["keep"])
+    ax1.fill_between(x, keeps["tok_s"].values, alpha=0.15, color=STATUS_COLORS["keep"])
     ax1.set_ylabel("Throughput (tok/s)")
     ax1.legend(loc="upper left", fontsize=9)
     ax1.grid(True, alpha=0.4)
 
-    ax2.plot(keeps["experiment_num"], keeps["ttft_ms"],
+    ax2.plot(x, keeps["ttft_ms"].values,
              "s-", color=ACCENT_COLOR, linewidth=2, markersize=6, label="TTFT (ms)")
-    ax2.fill_between(keeps["experiment_num"], keeps["ttft_ms"],
-                     alpha=0.15, color=ACCENT_COLOR)
+    ax2.fill_between(x, keeps["ttft_ms"].values, alpha=0.15, color=ACCENT_COLOR)
     ax2.set_ylabel("Time to First Token (ms)")
-    ax2.set_xlabel("Experiment #")
-    ax2.legend(loc="upper left", fontsize=9)
+    ax2.set_xlabel("Kept experiment (sequential)")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(xlabels, rotation=30, ha="right", fontsize=7.5)
+    ax2.legend(loc="upper right", fontsize=9)
     ax2.grid(True, alpha=0.4)
 
     fig.tight_layout()
@@ -286,12 +316,12 @@ def print_summary(df: pd.DataFrame):
     discards= df[df["status"] == "discard"]
 
     print("\n" + "=" * 55)
-    print("  autoresearch-inference — Run Summary")
+    print("  autoresearch-inference -- Run Summary")
     print("=" * 55)
     print(f"  Total experiments : {len(df)}")
-    print(f"    ✅ Keep         : {len(keeps)}")
-    print(f"    ❌ Discard      : {len(discards)}")
-    print(f"    💥 Crash        : {len(crashes)}")
+    print(f"    [keep]    : {len(keeps)}")
+    print(f"    [discard] : {len(discards)}")
+    print(f"    [crash]   : {len(crashes)}")
 
     if not keeps.empty:
         baseline   = keeps.iloc[0]["tok_s"]
