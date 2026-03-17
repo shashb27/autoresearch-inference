@@ -125,6 +125,7 @@ def make_generate_fn(model, tokenizer):
         output = model.generate(
             input_ids,
             max_new_tokens=MAX_NEW_TOKENS,
+            min_new_tokens=MAX_NEW_TOKENS,  # Skip early stopping checks
             do_sample=False,
             temperature=None,
             top_p=None,
@@ -136,17 +137,24 @@ def make_generate_fn(model, tokenizer):
 
 
 # ============================================================
-# SECTION 5: Memory Management
+# SECTION 5: Memory Management & Kernel Optimization
 # ============================================================
 
 def setup_memory():
-    """Configure GPU memory allocation before benchmarking."""
+    """Configure GPU memory allocation and kernel optimization before benchmarking."""
+    # Memory management
     if GC_COLLECT_BEFORE_BENCHMARK:
         gc.collect()
     if EMPTY_CACHE_BEFORE_BENCHMARK and torch.cuda.is_available():
         torch.cuda.empty_cache()
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
+
+    # Kernel optimization (from LEARNINGS.md best config)
+    torch.set_float32_matmul_precision('high')  # Enable TF32 for FP32 matmuls
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cudnn.benchmark = True  # Auto-tune cuDNN kernels
 
 
 # ============================================================

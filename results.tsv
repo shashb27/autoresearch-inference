@@ -1,1 +1,2 @@
 commit	tok_s	ttft_ms	peak_vram_gb	status	description
+a987018	37.81	26.43	5.8	keep	baseline: FP16 + SDPA + compile default + TF32 + cudnn.benchmark + min_new_tokens
