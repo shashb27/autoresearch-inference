@@ -75,6 +75,40 @@ Generates:
 - `outcomes_donut.png` — keep / discard / crash ratio
 - `tok_s_vs_ttft.png` — throughput vs latency dual-axis (kept experiments only)
 
+## Results
+
+Actual measured results from autonomous agent runs. Each branch is one session; the agent runs ~16 experiments per session and commits findings to `results.tsv`.
+
+### Run log
+
+| Date | Branch | Model | GPU | Experiments | Best tok/s | Gain |
+|---|---|---|---|---|---|---|
+| Mar 17 2026 | [mar17](../../tree/autoresearch/mar17) | Qwen2.5-0.5B | RTX 3060 Ti | 16 | 61.45 | +6.6% |
+| Mar 17 2026 | [mar17-r2](../../tree/autoresearch/mar17-r2) | Qwen2.5-0.5B | RTX 3060 Ti | 18 | 61.63 | +5.1% |
+
+### Optimization findings — Qwen2.5-0.5B · RTX 3060 Ti (Ampere sm_86)
+
+Baseline: **57.6 tok/s** (FP16 + SDPA + torch.compile default)
+
+| Technique | tok/s | vs baseline | Verdict | Notes |
+|---|---|---|---|---|
+| BF16 dtype | 61.3 | +6.4% | ✅ keep | Native on Ampere — biggest single win |
+| min_new_tokens = max_new_tokens | 61.6 | +6.9% | ✅ keep | Skips early-stop overhead |
+| TF32 matmul precision | 60.9 | +5.7% | ✅ keep | `torch.backends.cuda.matmul.allow_tf32 = True` |
+| use_cache=True + return_dict=False | 61.5 | +6.6% | ✅ keep | Minor but free |
+| torch.compile (default mode) | baseline | — | ✅ baseline | Already in baseline |
+| torch.compile reduce-overhead | 58.0 | +0.6% | ❌ discard | No meaningful gain over default |
+| torch.compile max-autotune | 58.8 | +2.1% | ❌ discard | Not worth compile time |
+| torch.compile fullgraph=True | 60.2 | +4.5% | ❌ discard | Marginal, less stable |
+| BF16 eager mode (no compile) | 59.3 | +3.0% | ❌ discard | Compile helps |
+| BetterTransformer | 58.4 | +1.4% | ❌ discard | Negligible |
+| INT8 weight-only (torchao) | 35.0 | **-39%** | ❌ discard | Overhead dominates at 0.5B scale |
+| INT4 quantization | — | — | 💥 crash | Missing `mslk>=1.0.0` |
+| Static cache + compile | — | — | 💥 crash | Triton compile error on RTX 3060 Ti |
+| Custom decode loop + compile | — | — | 💥 crash | Triton compile error |
+
+> **Key insight:** At 0.5B scale the model is too small for quantization to help — kernel overhead outweighs memory savings. Expect INT8/INT4 to be beneficial at 7B+.
+
 ## Project structure
 
 ```
