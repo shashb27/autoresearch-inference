@@ -46,7 +46,7 @@ print('config -> $MODEL_ID')
 "
     # Run prepare.py to establish baseline first
     echo "Running prepare.py..."
-    uv run prepare.py 2>&1 | tee "$REPO/prepare-${MODEL_SLUG}-${RUN}.log"
+    uv run prepare.py --model "$MODEL_ID" 2>&1 | tee "$REPO/prepare-${MODEL_SLUG}-${RUN}.log"
 
     # Fresh results (baseline already added by prepare.py)
     # Run agent loop
