@@ -92,14 +92,3 @@ profile.txt            # Generated: torch.profiler output
 plots/                 # Generated: visualization output from analyze.py
 ```
 
-## Expected progression
-
-| Optimization | Est. tok/s | Gain |
-|---|---|---|
-| Baseline (FP16 + compile) | ~70 | — |
-| + Flash Attention 2 | ~85 | +21% |
-| + INT8 quantization | ~120 | +41% |
-| + INT4 quantization | ~160 | +33% |
-| + Custom decode loop | ~180 | +12% |
-| + CUDA graphs | ~200 | +11% |
-| + Speculative decoding | ~250+ | +25% |
