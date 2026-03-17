@@ -1,98 +1,98 @@
 # LEARNINGS.md — Cross-Run Knowledge Base
 
-This file persists **across all autoresearch branches**.  
-The agent reads it at setup and updates it at the end of each session.  
+This file persists **across all autoresearch branches**.
+The agent reads it at setup and updates it at the end of each session.
 Do NOT reset or delete between runs — it is your long-term memory.
 
 ---
 
 ## Hardware Notes
 
-> Fill in after first `prepare.py` run.
-
-<!--
-Example:
-- GPU: NVIDIA A100 80GB (compute 8.0) — BF16 ✅, FP8 ❌
-- VRAM budget: ~72 GB (90% of 80 GB)
-- BF16 is faster than FP16 on this GPU — always prefer BF16
--->
-
-_Not yet populated._
+- GPU: NVIDIA GeForce RTX 3060 Ti (compute 8.6), 7.7 GB VRAM
+- Model: Qwen/Qwen2.5-0.5B (~0.9 GB VRAM in FP16)
+- VRAM budget: ~6.9 GB (90% of total)
+- **FP16 is faster than BF16 on this specific setup** — counterintuitive, but confirmed across multiple runs
+- TF32 tensor cores available on Ampere (sm_86) — enable via matmul precision + backends
+- FP8 not supported (fp8_supported: false in hardware.json)
 
 ---
 
 ## What Works (confirmed gains)
 
-> List techniques that reliably improved tok/s on this hardware.
-> Format: `technique → approx gain | notes`
+- `torch.set_float32_matmul_precision('high')` → +0.26% | enables TF32 for FP32 matmuls
+- `torch.backends.cudnn.benchmark = True` → +2.7% | auto-tunes cuDNN kernels
+- Explicit TF32 enable (`torch.backends.cuda.matmul.allow_tf32 = True`, `torch.backends.cudnn.allow_tf32 = True`) → +0.9%
+- `min_new_tokens=max_new_tokens` in generate() → +1.2% | skips early stopping checks
 
-<!--
-Example:
-- flash_attention_2 → +18–22% | requires `uv add flash-attn`, slow first compile
-- INT8 torchao → +35–45% | some quality loss on math prompts, acceptable
-- torch.compile reduce-overhead → +5–8% | only helps after warmup
--->
-
-_Not yet populated._
+**Cumulative gain from R2 session: +5.2% (58.61 → 61.63 tok/s)**
 
 ---
 
 ## What Doesn't Work (save time, skip these)
 
-> Approaches that crashed, produced garbage, or gave no gain on this hardware.
+### Never attempt on this hardware:
+- **BF16 dtype** → consistently 1-2% slower than FP16 (unexpected, but confirmed 3x)
+- **INT8 weight-only quantization (torchao)** → -44% (34.29 tok/s) | overhead dominates on tiny 0.5B model
+- **INT4 quantization (torchao)** → crashes (missing mslk>=1.0.0 dependency, not installable)
+- torch.compile `reduce-overhead` mode → no gain vs default
+- torch.compile `max-autotune` mode → no gain vs default
+- torch.compile `fullgraph=True` → no gain
+- torch.compile `dynamic=False` (static shapes) → regression
+- Static KV cache (from R1) → crashes with Triton compile error
+- Custom decode loop (from R1) → crashes with Triton compile error
 
-<!--
-Example:
-- INT4 bitsandbytes → crashes on A100 (missing CUDA kernel for sm_80)
-- fp8 quantization → no gain (GPU doesn't support native FP8)
-- CUDA graphs → unstable with variable-length inputs, not worth debugging
-- vllm → incompatible with current torch version
--->
-
-_Not yet populated._
+### Other failed optimizations:
+- `use_cache=True + return_dict_in_generate=False` → regression
+- `channels_last` memory format → no gain
+- NVFuser enabled → regression
+- `pad_to_multiple_of=8` in tokenizer → no gain
+- `torch.set_grad_enabled(False)` globally → regression (-2.9%)
+- `eos_token_id=None` → regression
+- Explicitly disable `output_scores/attentions/hidden_states` → regression
+- `num_return_sequences=1` explicitly → slight regression
+- Remove `pad_token_id` from generate() → slight regression
+- CUDA graphs via `torch._inductor.config.triton.cudagraphs = True` → slight regression (-0.5%)
 
 ---
 
 ## Near-Misses Worth Revisiting
 
-> Ideas that showed partial promise but weren't quite right.
-> Include what to try differently next time.
-
-<!--
-Example:
-- Speculative decoding with Qwen2.5-0.5B draft → 12% gain but 30% invalid outputs
-  → Try: lower acceptance threshold, or use a better draft model
-- compile max-autotune → 3h compile time, killed
-  → Try: pre-cache compilation artifacts across runs
--->
-
-_Not yet populated._
+- **Flash Attention 2** → NOT yet tried. Requires `uv add flash-attn` (long build ~10 min).
+  → Worth trying on longer sequences or with a larger model (7B+)
+- **Quantization at larger scale** → INT8/INT4 failed on 0.5B, but may help on 7B+ models where memory bandwidth is the true bottleneck
+- **Speculative decoding** → NOT tried, complex to implement, needs draft model
+- **Custom decode loop without compile** → Tried in R1, was slower. May be worth revisiting with better kernel implementation
+- **vLLM or SGLang backends** → NOT tried, may offer better inference kernels
 
 ---
 
 ## Best Config Found (so far)
 
-> Copy the winning `infer.py` configuration section here for easy reference.
-
-<!--
-Example:
-DTYPE = torch.bfloat16
-ATTENTION_IMPLEMENTATION = "flash_attention_2"
+```python
+# Model loading
+DTYPE = torch.float16  # NOT bfloat16! (FP16 is faster on RTX 3060 Ti)
+ATTENTION_IMPLEMENTATION = "sdpa"
 USE_TORCH_COMPILE = True
-COMPILE_MODE = "reduce-overhead"
-QUANTIZATION_ENABLED = True
-QUANTIZATION_TYPE = "int8"
-  → tok/s: 142.3, VRAM: 9.1 GB  (run: mar10, commit: a1b2c3d)
--->
+COMPILE_MODE = "default"  # NOT reduce-overhead or max-autotune
 
-_Not yet populated._
+# Memory management & kernel optimization
+torch.set_float32_matmul_precision('high')
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.benchmark = True
+
+# Generation
+max_new_tokens = 256
+min_new_tokens = 256  # Skip early stopping
+do_sample = False
+```
+
+→ **tok/s: 61.63, TTFT: 16.22ms, VRAM: 0.9 GB** (run: mar17-r2, commit: a021e3d)
 
 ---
 
 ## Session Log
 
-> One line per completed session. Agent appends to this.
-
 | Date | Run tag | Experiments | Best tok/s | Best config |
 |------|---------|-------------|------------|-------------|
-| —    | —       | —           | —          | —           |
+| 2026-03-17 | autoresearch/mar17-r2 | 19 | 61.63 | FP16 + TF32 + cudnn.benchmark + min_new_tokens=max_new_tokens |

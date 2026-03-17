@@ -1,1 +1,2 @@
 commit	tok_s	ttft_ms	peak_vram_gb	status	description
+a987018	49.57	20.18	2.9	baseline	FP16 + SDPA + torch.compile default (1.5B model)
