@@ -44,12 +44,12 @@ cfg = {
 json.dump(cfg, open('config.json','w'), indent=2)
 print('config -> $MODEL_ID')
 "
-    # Run prepare.py to establish baseline first
-    echo "Running prepare.py..."
+    # Run prepare.py: baseline + profiling so agent starts with real bottleneck data
+    echo "Running prepare.py (baseline + profile)..."
     uv run prepare.py --model "$MODEL_ID" 2>&1 | tee "$REPO/prepare-${MODEL_SLUG}-${RUN}.log"
+    uv run prepare.py --model "$MODEL_ID" --profile 2>&1 | tee -a "$REPO/prepare-${MODEL_SLUG}-${RUN}.log"
 
-    # Fresh results (baseline already added by prepare.py)
-    # Run agent loop
+    # Run agent loop — program.md requires agent to read profile.txt before experimenting
     echo "Running agent loop..."
     bash "$REPO/run_loop.sh" 2>&1 | tee "$REPO/agent-${MODEL_SLUG}-${RUN}.log"
     echo "Done: $BRANCH"
