@@ -102,13 +102,13 @@ def optimize_model(model):
     # Apply quantization first (before compile)
     if QUANTIZATION_ENABLED:
         if QUANTIZATION_TYPE == "int8":
-            from torchao.quantization import quantize_, int8_weight_only
+            from torchao.quantization import quantize_, Int8WeightOnlyConfig
             print(f"Applying INT8 weight-only quantization...")
-            quantize_(model, int8_weight_only())
+            quantize_(model, Int8WeightOnlyConfig())
         elif QUANTIZATION_TYPE == "int4":
-            from torchao.quantization import quantize_, int4_weight_only
+            from torchao.quantization import quantize_, Int4WeightOnlyConfig
             print(f"Applying INT4 weight-only quantization...")
-            quantize_(model, int4_weight_only())
+            quantize_(model, Int4WeightOnlyConfig())
         else:
             print(f"Warning: Quantization type '{QUANTIZATION_TYPE}' not supported")
 
