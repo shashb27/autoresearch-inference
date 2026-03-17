@@ -58,18 +58,38 @@ uv run prepare.py --check                     # Verify project structure (no GPU
 uv run prepare.py --profile                   # Profile bottlenecks
 ```
 
+## Visualize results
+
+After a run (or during one), generate plots from `results.tsv`:
+
+```bash
+uv run analyze.py                  # outputs to plots/
+uv run analyze.py --out my_plots/  # custom output dir
+uv run analyze.py --show           # also open in browser
+```
+
+Generates:
+- `tok_s_progression.png` — speed over time with best-so-far line and improvement annotations
+- `vram_vs_toks.png` — VRAM vs tok/s efficiency frontier
+- `improvement_deltas.png` — % gain per kept experiment vs baseline
+- `outcomes_donut.png` — keep / discard / crash ratio
+- `tok_s_vs_ttft.png` — throughput vs latency dual-axis (kept experiments only)
+
 ## Project structure
 
 ```
 prepare.py             # READ-ONLY: GPU discovery, benchmark harness
 infer.py               # MUTABLE: Agent modifies this
+analyze.py             # Visualization: generates plots from results.tsv
 program.md             # Agent instructions + decision framework
+LEARNINGS.md           # Cross-run knowledge base (persists across branches)
 results.tsv            # Experiment log (created per run)
 prompts/prompts.json   # Fixed benchmark prompts
-analysis.ipynb         # Visualization notebook
+analysis.ipynb         # Legacy visualization notebook
 config.json            # Generated: model path, device, VRAM limit
 hardware.json          # Generated: GPU capabilities for agent
 profile.txt            # Generated: torch.profiler output
+plots/                 # Generated: visualization output from analyze.py
 ```
 
 ## Expected progression

@@ -362,6 +362,10 @@ def benchmark(generate_fn, tokenizer):
     valid_count = 0
     invalid_count = 0
 
+    # Per-prompt records for category breakdown
+    from collections import defaultdict
+    cat_records = defaultdict(list)  # category -> list of (tok_s, is_valid)
+
     print(f"Benchmarking {NUM_PROMPTS} prompts (generating {MAX_NEW_TOKENS} tokens each)...")
     for i, prompt_data in enumerate(prompts):
         input_ids = tokenizer.encode(prompt_data["text"], return_tensors="pt")
@@ -395,9 +399,12 @@ def benchmark(generate_fn, tokenizer):
             invalid_count += 1
             print(f"  WARNING: Prompt {prompt_data['id']} invalid output: {error}")
 
-        status = "OK" if is_valid else "INVALID"
         tok_s_this = num_new / gen_time if gen_time > 0 else 0
-        print(f"  [{i+1:2d}/{NUM_PROMPTS}] {prompt_data['category']:6s} | "
+        cat = prompt_data.get("category", "unknown")
+        cat_records[cat].append((tok_s_this, is_valid))
+
+        status = "OK" if is_valid else "INVALID"
+        print(f"  [{i+1:2d}/{NUM_PROMPTS}] {cat:8s} | "
               f"{num_new:3d} tokens | {gen_time:.2f}s | "
               f"{tok_s_this:.1f} tok/s | {status}")
 
@@ -429,6 +436,17 @@ def benchmark(generate_fn, tokenizer):
     print(f"total_tokens:     {results['total_tokens']}")
     print(f"valid_outputs:    {results['valid_outputs']}")
     print(f"invalid_outputs:  {results['invalid_outputs']}")
+
+    # --- Per-category breakdown ---
+    print()
+    print("--- category breakdown ---")
+    for cat in sorted(cat_records.keys()):
+        records = cat_records[cat]
+        cat_tok_s_vals = [r[0] for r in records]
+        cat_valid_count = sum(1 for r in records if r[1])
+        avg_tok_s = sum(cat_tok_s_vals) / len(cat_tok_s_vals) if cat_tok_s_vals else 0
+        print(f"  {cat:10s}: avg {avg_tok_s:6.1f} tok/s | "
+              f"{cat_valid_count}/{len(records)} valid")
 
     # --- Safety checks ---
     if peak_vram_gb > VRAM_LIMIT_GB:

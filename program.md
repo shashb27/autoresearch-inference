@@ -15,6 +15,7 @@ To set up a new experiment run, work with the user to:
    - `infer.py` — the file you modify. Model loading, optimization, generation loop.
    - `README.md` — repository context.
    - `prepare.py` — fixed benchmark harness, metrics, validation. Do not modify.
+   - `LEARNINGS.md` — **cross-run knowledge base**. Read this carefully. It contains confirmed gains, known failures, and near-misses from previous sessions. Do not repeat approaches listed under "What Doesn't Work".
 4. **Verify model exists**: Check that the model path from `config.json` contains model files. If not, tell the human to run `uv run prepare.py`.
 5. **Initialize results.tsv**: Create `results.tsv` with just the header row. The baseline will be recorded after the first run.
 6. **Confirm and go**: Confirm setup looks good.
@@ -146,6 +147,32 @@ LOOP FOREVER:
 
 **NEVER STOP**: Once the experiment loop has begun (after the initial setup), do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until you are manually stopped. You are autonomous. If you run out of ideas, think harder — re-read the code, re-read hardware.json, re-profile, try combining previous near-misses, try more radical changes. The loop runs until the human interrupts you, period.
 
+## When you are stopped (session end)
+
+When the human interrupts you or you are told to stop, do the following **before finishing**:
+
+1. **Update LEARNINGS.md** — add to the relevant sections:
+   - Hardware notes (if this is the first run)
+   - Confirmed gains → "What Works"
+   - Failed techniques → "What Doesn't Work"
+   - Partial gains worth revisiting → "Near-Misses"
+   - Copy best `infer.py` config into "Best Config Found"
+   - Append a row to the Session Log table
+
+2. **Generate visualizations**:
+   ```bash
+   uv run analyze.py
+   ```
+   This writes plots to `plots/`. Commit them with the run.
+
+3. **Final commit**:
+   ```bash
+   git add LEARNINGS.md plots/ results.tsv
+   git commit -m "session end: update learnings and plots [<run_tag>]"
+   ```
+
+4. **Print a summary** of what was learned this session — best config, what worked, what to try next time.
+
 ## Research directions (adapt to hardware.json capabilities)
 
 ### Phase 1: Quick wins
@@ -176,10 +203,30 @@ LOOP FOREVER:
 
 ## Decision rules
 
-- **PRIMARY metric**: tok_s (higher is better)
-- **KEEP** if tok_s improves by any amount
-- **DISCARD** if tok_s stays same or decreases
+- **PRIMARY metric**: composite score = `tok_s × (valid_outputs / total_prompts)`
+  - This penalises quality regressions automatically — going faster at the cost of garbage output doesn't count
+  - In practice, if `valid_outputs == total_prompts` (which it usually is), composite score == tok_s
+- **KEEP** if composite score improves by any amount
+- **DISCARD** if composite score stays same or decreases
 - **DISCARD** if peak_vram_gb exceeds the limit in config.json
 - **CRASH** if benchmark fails or produces invalid output (>20% invalid outputs)
 - **TIE-BREAKER**: prefer lower peak_vram_gb, then lower ttft_ms
 - **SIMPLICITY**: all else equal, simpler code wins
+
+## Backtracking rules
+
+These are mandatory, not optional:
+
+- **After 3 consecutive discards** → re-profile immediately:
+  ```bash
+  uv run prepare.py --profile
+  ```
+  Read the new `profile.txt`. The bottleneck may have shifted. Adjust strategy before continuing.
+
+- **After 5 consecutive discards** → hard reset to a new phase:
+  1. `git reset HEAD --hard` (ensure you're on the best known state)
+  2. Re-read `hardware.json` and `LEARNINGS.md`
+  3. Jump to the next unexplored phase (Phase 1 → 2 → 3 → 4)
+  4. Do NOT keep grinding the same phase that isn't yielding results
+
+- **After 8 consecutive discards** → write a diagnosis to `LEARNINGS.md` under "Near-Misses Worth Revisiting", then re-profile and start fresh from Phase 1 with a completely different angle (e.g. if you were doing quantization, switch to custom decode loop)

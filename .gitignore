@@ -18,6 +18,10 @@ config.json
 hardware.json
 profile.txt
 
+# Plots — committed per run branch, ignored on main
+# (remove this line on autoresearch/* branches to track plots)
+plots/
+
 # Jupyter
 .ipynb_checkpoints/
 
