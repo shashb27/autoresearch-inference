@@ -1,2 +1,12 @@
 commit	tok_s	ttft_ms	peak_vram_gb	status	description
 a987018	49.57	20.18	2.9	baseline	FP16 + SDPA + torch.compile default (1.5B model)
+5962310	50.20	19.93	2.9	keep	TF32 + cudnn.benchmark + min_new_tokens=max
+a4e0d92	0.00	0.0	0.0	crash	INT8 weight-only (torchao) — timeout during inference
+3203851	48.70	20.53	2.9	discard	compile mode=reduce-overhead — regression
+c02d81a	47.20	21.21	2.9	discard	compile mode=max-autotune — major regression
+6bd87cc	47.10	21.24	2.9	discard	BF16 dtype — confirmed slower than FP16
+8d0d115	49.59	20.16	2.9	discard	disable torch.compile — small regression (compile only +1.2%)
+1a2a59c	41.21	24.26	2.9	crash	attention=eager — major regression + 0 valid outputs
+c9aae67	50.28	19.88	2.9	discard	disable GC/cache — gain too small (< noise)
+908a8d2	49.97	20.02	2.9	discard	compile fullgraph=True — small regression
+da9e9a2	47.61	21.02	2.9	discard	compile dynamic=False — confirmed regression
