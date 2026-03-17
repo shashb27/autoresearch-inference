@@ -6,11 +6,17 @@ Inspired by [autoresearch](https://github.com/karpathy/autoresearch), but target
 
 ## How it works
 
-1. `prepare.py` (read-only) — Discovers GPU, downloads model, writes config, runs benchmark
+1. `prepare.py` (read-only) — Discovers GPU, downloads model, writes `config.json` + `hardware.json`, runs baseline benchmark, optionally profiles with torch.profiler
 2. `infer.py` (agent-modified) — Inference pipeline: model loading, optimization, generation
 3. `program.md` — Instructions for the AI agent's autonomous experiment loop
 
-The agent modifies `infer.py`, runs `uv run infer.py`, checks if tok/s improved, keeps or reverts, and loops forever.
+**The agent is evidence-driven, not exploratory:**
+- Reads `profile.txt` to identify the actual bottleneck before choosing what to try
+- States a hypothesis with a predicted % gain before each experiment
+- Skips experiments with predicted gain < 3% (below measurement noise floor)
+- Re-profiles after 3 consecutive discards to check if the bottleneck shifted
+
+The loop: read profile → form hypothesis → modify `infer.py` → benchmark → improved? keep commit : revert → repeat.
 
 ## Features
 
@@ -41,11 +47,17 @@ uv run prepare.py --model "meta-llama/Llama-3.1-8B"
 ## Run the agent
 
 ```bash
-# Start Claude Code with the experiment instructions
+# 1. Baseline benchmark
+uv run prepare.py --model "Qwen/Qwen2.5-7B"
+
+# 2. Profile bottlenecks (required — agent reads this before experimenting)
+uv run prepare.py --model "Qwen/Qwen2.5-7B" --profile
+
+# 3. Start the agent
 claude -p "$(cat program.md)" --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
 ```
 
-The agent will run autonomously, modifying `infer.py` and benchmarking every ~5 minutes. Check `results.tsv` for experiment history.
+The agent reads `profile.txt`, identifies the bottleneck, states a hypothesis, then modifies `infer.py` and benchmarks. Check `results.tsv` for experiment history.
 
 **Tip**: Run in `tmux` so the agent survives SSH disconnects.
 
