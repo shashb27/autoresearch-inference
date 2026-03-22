@@ -21,7 +21,6 @@ import time
 import torch
 import torch._dynamo
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from torchao.quantization import quantize_, Int8WeightOnlyConfig
 
 # Allow more cache entries for varying input shapes
 torch._dynamo.config.cache_size_limit = 64
@@ -61,8 +60,8 @@ COMPILE_MODE = "default"            # "default", "reduce-overhead", "max-autotun
 COMPILE_BACKEND = "inductor"
 
 # Quantization
-QUANTIZATION_ENABLED = True
-QUANTIZATION_TYPE = "int8"          # "int8", "int4", "fp8", "nf4"
+QUANTIZATION_ENABLED = False
+QUANTIZATION_TYPE = None            # "int8", "int4", "fp8", "nf4"
 
 # Generation
 USE_STATIC_CACHE = False
@@ -104,9 +103,6 @@ def load_tokenizer():
 
 def optimize_model(model):
     """Apply post-load optimizations to the model."""
-    if QUANTIZATION_ENABLED and QUANTIZATION_TYPE == "int8":
-        quantize_(model, Int8WeightOnlyConfig())
-
     if USE_TORCH_COMPILE:
         model = torch.compile(
             model,
