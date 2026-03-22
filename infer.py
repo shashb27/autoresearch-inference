@@ -130,31 +130,21 @@ def make_generate_fn(model, tokenizer):
     @torch.inference_mode()
     def generate_fn(input_ids):
         input_ids = input_ids.to(DEVICE)
-        batch_size = input_ids.shape[0]
-        seq_len = input_ids.shape[1]
-
-        # Preallocate output buffer to avoid repeated torch.cat
-        output_ids = torch.empty(
-            batch_size, seq_len + MAX_NEW_TOKENS,
-            dtype=input_ids.dtype, device=input_ids.device
-        )
-        output_ids[:, :seq_len] = input_ids
+        generated = input_ids
         past_key_values = None
-        num_generated = 0
 
-        for i in range(MAX_NEW_TOKENS):
+        for _ in range(MAX_NEW_TOKENS):
             if past_key_values is None:
-                outputs = model(input_ids, use_cache=True)
+                outputs = model(generated, use_cache=True)
             else:
-                outputs = model(output_ids[:, seq_len + i - 1:seq_len + i], past_key_values=past_key_values, use_cache=True)
+                outputs = model(generated[:, -1:], past_key_values=past_key_values, use_cache=True)
             past_key_values = outputs.past_key_values
-            next_token_id = outputs.logits[:, -1, :].argmax(dim=-1)
-            output_ids[:, seq_len + i] = next_token_id
-            num_generated += 1
-            if next_token_id.item() == eos_token_id:
+            next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+            generated = torch.cat([generated, next_token], dim=-1)
+            if next_token.item() == eos_token_id:
                 break
 
-        return output_ids[:, :seq_len + num_generated]
+        return generated
 
     return generate_fn
 
