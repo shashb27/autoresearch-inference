@@ -11,3 +11,4 @@ be6f13c	275.14	3.63	1.0	keep	BF16 + custom decode + dynamic compile
 26c26a1	0.00	0.0	0.0	crash	max-autotune (missing setuptools)
 a7792fa	268.68	3.72	1.0	discard	preallocated output buffer (no gain)
 dfb3a9e	263.45	3.80	1.0	discard	float32 matmul precision high (no gain w/ BF16)
+ddfdb05	225.62	4.29	0.9	discard	INT8 weight-only (torchao) + custom decode
