@@ -68,6 +68,10 @@ PREALLOCATE_MEMORY = False
 GC_COLLECT_BEFORE_BENCHMARK = True
 EMPTY_CACHE_BEFORE_BENCHMARK = True
 
+# TF32 matmul precision (faster on Ampere+)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
 
 # ============================================================
 # SECTION 2: Model Loading
