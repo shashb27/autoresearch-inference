@@ -19,7 +19,11 @@ import json
 import time
 
 import torch
+import torch._dynamo
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Allow more cache entries for varying input shapes
+torch._dynamo.config.cache_size_limit = 64
 
 from prepare import benchmark
 
