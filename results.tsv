@@ -3,3 +3,4 @@ a9aef10	145.79	6.87	0.9	keep	baseline: FP16 + SDPA + torch.compile default
 29f55b0	145.58	6.86	0.9	discard	BF16 dtype
 dea0850	141.59	7.04	0.9	discard	TF32 matmul + min_new_tokens + use_cache
 2db5f32	143.22	7.00	0.9	discard	TF32 matmul precision only
+32edb78	144.73	6.90	1.0	discard	custom decode loop + no compile
