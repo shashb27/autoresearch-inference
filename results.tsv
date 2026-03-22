@@ -1,1 +1,14 @@
 commit	tok_s	ttft_ms	peak_vram_gb	status	description
+a9aef10	145.79	6.87	0.9	keep	baseline: FP16 + SDPA + torch.compile default
+29f55b0	145.58	6.86	0.9	discard	BF16 dtype
+dea0850	141.59	7.04	0.9	discard	TF32 matmul + min_new_tokens + use_cache
+2db5f32	143.22	7.00	0.9	discard	TF32 matmul precision only
+32edb78	144.73	6.90	1.0	discard	custom decode loop + no compile
+d7d461a	0.00	0.0	0.0	crash	custom decode + reduce-overhead (CUDA graph tensor overwrite)
+74ee661	201.75	3.36	1.0	keep	custom decode + compile default + dynamo cache=64
+fc32116	266.26	3.76	1.0	keep	custom decode + compile dynamic=True (no recompilation)
+be6f13c	275.14	3.63	1.0	keep	BF16 + custom decode + dynamic compile
+26c26a1	0.00	0.0	0.0	crash	max-autotune (missing setuptools)
+a7792fa	268.68	3.72	1.0	discard	preallocated output buffer (no gain)
+dfb3a9e	263.45	3.80	1.0	discard	float32 matmul precision high (no gain w/ BF16)
+ddfdb05	225.62	4.29	0.9	discard	INT8 weight-only (torchao) + custom decode

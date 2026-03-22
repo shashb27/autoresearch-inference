@@ -19,7 +19,11 @@ import json
 import time
 
 import torch
+import torch._dynamo
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Allow more cache entries for varying input shapes
+torch._dynamo.config.cache_size_limit = 64
 
 from prepare import benchmark
 
@@ -47,7 +51,7 @@ MAX_NEW_TOKENS = _CFG.get("max_new_tokens", 256)
 # ============================================================
 
 # Model loading
-DTYPE = torch.float16
+DTYPE = torch.bfloat16
 ATTENTION_IMPLEMENTATION = "sdpa"   # "sdpa", "flash_attention_2", "eager"
 
 # Compilation
@@ -104,6 +108,7 @@ def optimize_model(model):
             model,
             mode=COMPILE_MODE,
             backend=COMPILE_BACKEND,
+            dynamic=True,
         )
 
     return model
@@ -118,19 +123,28 @@ def make_generate_fn(model, tokenizer):
 
     Returns a function: generate_fn(input_ids) -> output_ids
     that generates MAX_NEW_TOKENS tokens using greedy decoding.
+    Custom decode loop to reduce HF generate() framework overhead.
     """
+    eos_token_id = tokenizer.eos_token_id
+
     @torch.inference_mode()
     def generate_fn(input_ids):
         input_ids = input_ids.to(DEVICE)
-        output = model.generate(
-            input_ids,
-            max_new_tokens=MAX_NEW_TOKENS,
-            do_sample=False,
-            temperature=None,
-            top_p=None,
-            pad_token_id=tokenizer.eos_token_id,
-        )
-        return output
+        generated = input_ids
+        past_key_values = None
+
+        for _ in range(MAX_NEW_TOKENS):
+            if past_key_values is None:
+                outputs = model(generated, use_cache=True)
+            else:
+                outputs = model(generated[:, -1:], past_key_values=past_key_values, use_cache=True)
+            past_key_values = outputs.past_key_values
+            next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+            generated = torch.cat([generated, next_token], dim=-1)
+            if next_token.item() == eos_token_id:
+                break
+
+        return generated
 
     return generate_fn
 
