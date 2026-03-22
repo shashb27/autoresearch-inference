@@ -47,7 +47,7 @@ MAX_NEW_TOKENS = _CFG.get("max_new_tokens", 256)
 # ============================================================
 
 # Model loading
-DTYPE = torch.bfloat16
+DTYPE = torch.float16
 ATTENTION_IMPLEMENTATION = "sdpa"   # "sdpa", "flash_attention_2", "eager"
 
 # Compilation
