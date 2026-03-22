@@ -5,3 +5,4 @@ dea0850	141.59	7.04	0.9	discard	TF32 matmul + min_new_tokens + use_cache
 2db5f32	143.22	7.00	0.9	discard	TF32 matmul precision only
 32edb78	144.73	6.90	1.0	discard	custom decode loop + no compile
 d7d461a	0.00	0.0	0.0	crash	custom decode + reduce-overhead (CUDA graph tensor overwrite)
+74ee661	201.75	3.36	1.0	keep	custom decode + compile default + dynamo cache=64
