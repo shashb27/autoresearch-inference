@@ -68,10 +68,6 @@ PREALLOCATE_MEMORY = False
 GC_COLLECT_BEFORE_BENCHMARK = True
 EMPTY_CACHE_BEFORE_BENCHMARK = True
 
-# TF32 matmul precision (faster on Ampere+)
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
-
 
 # ============================================================
 # SECTION 2: Model Loading
@@ -129,11 +125,9 @@ def make_generate_fn(model, tokenizer):
         output = model.generate(
             input_ids,
             max_new_tokens=MAX_NEW_TOKENS,
-            min_new_tokens=MAX_NEW_TOKENS,
             do_sample=False,
             temperature=None,
             top_p=None,
-            use_cache=True,
             pad_token_id=tokenizer.eos_token_id,
         )
         return output
