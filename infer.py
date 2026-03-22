@@ -56,7 +56,7 @@ ATTENTION_IMPLEMENTATION = "sdpa"   # "sdpa", "flash_attention_2", "eager"
 
 # Compilation
 USE_TORCH_COMPILE = True
-COMPILE_MODE = "default"            # "default", "reduce-overhead", "max-autotune"
+COMPILE_MODE = "max-autotune"       # "default", "reduce-overhead", "max-autotune"
 COMPILE_BACKEND = "inductor"
 
 # Quantization
