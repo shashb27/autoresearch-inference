@@ -108,6 +108,7 @@ def optimize_model(model):
             model,
             mode=COMPILE_MODE,
             backend=COMPILE_BACKEND,
+            dynamic=True,
         )
 
     return model
