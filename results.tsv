@@ -8,3 +8,4 @@ d7d461a	0.00	0.0	0.0	crash	custom decode + reduce-overhead (CUDA graph tensor ov
 74ee661	201.75	3.36	1.0	keep	custom decode + compile default + dynamo cache=64
 fc32116	266.26	3.76	1.0	keep	custom decode + compile dynamic=True (no recompilation)
 be6f13c	275.14	3.63	1.0	keep	BF16 + custom decode + dynamic compile
+26c26a1	0.00	0.0	0.0	crash	max-autotune (missing setuptools)
