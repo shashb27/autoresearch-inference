@@ -1,0 +1,55 @@
+{
+  "run_id": "h100-llama70b-20260321",
+  "submitted_at": "2026-03-21T20:30:00Z",
+  "contributor": "gpu-research-lab",
+  "branch": "autoresearch/mar21-70b",
+  "hardware": {
+    "gpu_name": "NVIDIA H100 SXM5 80GB",
+    "gpu_family": "Hopper",
+    "compute_capability": "9.0",
+    "vram_total_gb": 80.0,
+    "cuda_version": "12.4",
+    "bf16_supported": true,
+    "fp8_supported": true
+  },
+  "model": {
+    "id": "meta-llama/Llama-3.1-70B",
+    "params_b": 70.0,
+    "family": "Llama 3.1"
+  },
+  "results": {
+    "baseline_tok_s": 12.8,
+    "best_tok_s": 28.4,
+    "gain_pct": 121.9,
+    "best_ttft_ms": 34.6,
+    "best_vram_gb": 38.2,
+    "total_experiments": 18,
+    "keep_count": 5,
+    "discard_count": 11,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "BF16 + Flash Attention 2 + FP8 weight quantization (torchao) + torch.compile",
+    "techniques": ["bf16", "flash_attention_2", "fp8_quantization", "torch_compile"]
+  },
+  "experiments": [
+    {"n": 0,  "tok_s": 12.8,  "status": "keep",    "description": "baseline: BF16 + SDPA + compile (required BF16 for 70B)"},
+    {"n": 1,  "tok_s": 15.4,  "status": "keep",    "description": "BF16 + Flash Attention 2"},
+    {"n": 2,  "tok_s": 14.8,  "status": "discard", "description": "FA2 + compile reduce-overhead"},
+    {"n": 3,  "tok_s": 16.2,  "status": "keep",    "description": "BF16 + FA2 + compile dynamic=True"},
+    {"n": 4,  "tok_s": 22.6,  "status": "keep",    "description": "BF16 + FA2 + FP8 weights (torchao)"},
+    {"n": 5,  "tok_s": 21.4,  "status": "discard", "description": "FP8 + INT8 combined"},
+    {"n": 6,  "tok_s": 24.8,  "status": "discard", "description": "FP8 + compile dynamic"},
+    {"n": 7,  "tok_s": 0.0,   "status": "crash",   "description": "CUDA graphs 70B memory layout issue"},
+    {"n": 8,  "tok_s": 26.2,  "status": "discard", "description": "FP8 + FA2 + compile"},
+    {"n": 9,  "tok_s": 28.4,  "status": "keep",    "description": "BF16+FA2+FP8+compile(dynamic)+dynamo cache"},
+    {"n": 10, "tok_s": 27.8,  "status": "discard", "description": "add return_dict=False"},
+    {"n": 11, "tok_s": 27.2,  "status": "discard", "description": "custom decode loop (slight regression)"},
+    {"n": 12, "tok_s": 28.1,  "status": "discard", "description": "no EOS check in loop"},
+    {"n": 13, "tok_s": 0.0,   "status": "crash",   "description": "INT4 OOM even with FP8"},
+    {"n": 14, "tok_s": 27.9,  "status": "discard", "description": "dynamo cache=128"},
+    {"n": 15, "tok_s": 27.6,  "status": "discard", "description": "pin_memory input"},
+    {"n": 16, "tok_s": 28.2,  "status": "discard", "description": "torch.backends.cuda.matmul.allow_tf32"},
+    {"n": 17, "tok_s": 28.0,  "status": "discard", "description": "pre-allocate past_key_values buffer"}
+  ]
+}

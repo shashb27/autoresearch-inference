@@ -1,0 +1,57 @@
+{
+  "run_id": "a100-40gb-qwen7b-20260318",
+  "submitted_at": "2026-03-18T14:22:00Z",
+  "contributor": "cloud-runner",
+  "branch": "autoresearch/mar18-a100",
+  "hardware": {
+    "gpu_name": "NVIDIA A100-SXM4-40GB",
+    "gpu_family": "Ampere",
+    "compute_capability": "8.0",
+    "vram_total_gb": 40.0,
+    "cuda_version": "12.3",
+    "bf16_supported": true,
+    "fp8_supported": false
+  },
+  "model": {
+    "id": "Qwen/Qwen2.5-7B",
+    "params_b": 7.0,
+    "family": "Qwen2.5"
+  },
+  "results": {
+    "baseline_tok_s": 61.4,
+    "best_tok_s": 118.7,
+    "gain_pct": 93.3,
+    "best_ttft_ms": 8.4,
+    "best_vram_gb": 14.6,
+    "total_experiments": 20,
+    "keep_count": 5,
+    "discard_count": 13,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "BF16 + Flash Attention 2 + torch.compile(dynamic=True) + custom decode loop",
+    "techniques": ["bf16", "flash_attention_2", "torch_compile", "custom_decode_loop"]
+  },
+  "experiments": [
+    {"n": 0,  "tok_s": 61.4,  "status": "keep",    "description": "baseline: FP16 + SDPA + compile default"},
+    {"n": 1,  "tok_s": 68.2,  "status": "keep",    "description": "BF16 dtype"},
+    {"n": 2,  "tok_s": 85.3,  "status": "keep",    "description": "BF16 + Flash Attention 2"},
+    {"n": 3,  "tok_s": 82.1,  "status": "discard", "description": "FA2 + compile reduce-overhead"},
+    {"n": 4,  "tok_s": 88.6,  "status": "keep",    "description": "BF16 + FA2 + compile dynamic=True"},
+    {"n": 5,  "tok_s": 86.4,  "status": "discard", "description": "INT8 torchao (no gain at 7B on A100)"},
+    {"n": 6,  "tok_s": 84.1,  "status": "discard", "description": "TF32 matmul with FA2"},
+    {"n": 7,  "tok_s": 91.2,  "status": "discard", "description": "dynamo cache=128"},
+    {"n": 8,  "tok_s": 105.8, "status": "keep",    "description": "BF16 + FA2 + custom decode + compile"},
+    {"n": 9,  "tok_s": 103.2, "status": "discard", "description": "add static KV cache"},
+    {"n": 10, "tok_s": 108.4, "status": "discard", "description": "return_dict=False"},
+    {"n": 11, "tok_s": 0.0,   "status": "crash",   "description": "CUDA graphs with variable-length inputs"},
+    {"n": 12, "tok_s": 112.6, "status": "discard", "description": "torch.backends.cudnn.benchmark=True"},
+    {"n": 13, "tok_s": 118.7, "status": "keep",    "description": "BF16 + FA2 + compile dynamic + decode no cat"},
+    {"n": 14, "tok_s": 116.2, "status": "discard", "description": "remove synchronize in loop"},
+    {"n": 15, "tok_s": 115.8, "status": "discard", "description": "INT8 + FA2 combined"},
+    {"n": 16, "tok_s": 117.1, "status": "discard", "description": "pinned memory input"},
+    {"n": 17, "tok_s": 0.0,   "status": "crash",   "description": "torch.compile fullgraph triton error"},
+    {"n": 18, "tok_s": 116.9, "status": "discard", "description": "no EOS check in loop"},
+    {"n": 19, "tok_s": 118.0, "status": "discard", "description": "preallocate output tensor"}
+  ]
+}
