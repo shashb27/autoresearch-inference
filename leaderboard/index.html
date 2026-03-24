@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>autoresearch-inference — Community Leaderboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d2e;
+    --surface2: #252840;
+    --border: #2e3150;
+    --text: #e2e8f0;
+    --text-muted: #8892a4;
+    --accent: #6366f1;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --radius: 10px;
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 0 0 60px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Header */
+  header {
+    background: linear-gradient(135deg, #1a1d2e 0%, #12152a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px 24px;
+  }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--text-muted); margin-top: 4px; font-size: 13px; }
+  .header-meta {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Layout */
+  .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+  .section { margin-top: 32px; }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  /* Stat cards */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 14px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+  }
+  .stat-card .value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .stat-card .sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Charts */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  .chart-wide { grid-column: span 2; }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .chart-card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .chart-wrapper { position: relative; }
+  .chart-wrapper canvas { width: 100% !important; }
+
+  @media (max-width: 768px) {
+    .charts-grid { grid-template-columns: 1fr; }
+    .chart-wide { grid-column: span 1; }
+    header { padding: 20px; }
+  }
+
+  /* Table */
+  .table-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .table-controls input[type="search"] {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 12px;
+    outline: none;
+    width: 220px;
+  }
+  .table-controls input[type="search"]:focus {
+    border-color: var(--accent);
+  }
+  .table-controls select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    cursor: pointer;
+  }
+  .table-controls select:focus { border-color: var(--accent); }
+  .table-controls label {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 14px;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--border);
+  }
+  thead th:hover { color: var(--text); }
+  thead th.sorted-asc::after  { content: " ↑"; color: var(--accent); }
+  thead th.sorted-desc::after { content: " ↓"; color: var(--accent); }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  td {
+    padding: 10px 14px;
+    white-space: nowrap;
+    color: var(--text);
+  }
+  td.mono { font-family: var(--font-mono); font-size: 12px; }
+  .rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--surface2);
+    color: var(--text-muted);
+  }
+  .rank-badge.gold   { background: #854d0e; color: #fde68a; }
+  .rank-badge.silver { background: #374151; color: #d1d5db; }
+  .rank-badge.bronze { background: #7c2d12; color: #fed7aa; }
+
+  .gain-pill {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+  }
+  .gain-pill.high   { background: #064e3b; color: #6ee7b7; }
+  .gain-pill.medium { background: #1c3a20; color: #86efac; }
+  .gain-pill.low    { background: #1f2937; color: #9ca3af; }
+
+  .tech-list {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .family-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+  }
+
+  .no-results {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  /* Footer */
+  footer {
+    margin-top: 48px;
+    padding: 20px 40px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>autoresearch-inference <span>Leaderboard</span></h1>
+    <p>Community benchmark: maximize tok/s for open-weight LLMs on consumer and datacenter GPUs.</p>
+    <div class="header-meta">
+      Generated 2026-03-24 07:40 UTC &nbsp;·&nbsp;
+      <a href="https://github.com/shashb27/autoresearch-inference">github.com/shashb27/autoresearch-inference</a>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="section">
+    <div class="section-title">Overview</div>
+    <div class="stats-grid" id="stats-grid">
+    <div class="stat-card">
+      <div class="value">8</div>
+      <div class="label">Total Runs</div>
+      
+    </div>
+    <div class="stat-card">
+      <div class="value">5</div>
+      <div class="label">Unique GPUs</div>
+      
+    </div>
+    <div class="stat-card">
+      <div class="value">4</div>
+      <div class="label">Models Tested</div>
+      
+    </div>
+    <div class="stat-card">
+      <div class="value">6</div>
+      <div class="label">Contributors</div>
+      
+    </div>
+    <div class="stat-card">
+      <div class="value">275.1</div>
+      <div class="label">Top tok/s</div>
+      <div class="sub" title="RTX 4090 · Qwen2.5-0.5B">RTX 4090 · Qwen2.5-0.5B</div>
+    </div>
+    <div class="stat-card">
+      <div class="value">+125.2%</div>
+      <div class="label">Best Gain</div>
+      <div class="sub" title="H100 SXM5 80GB">H100 SXM5 80GB</div>
+    </div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="section">
+    <div class="section-title">Charts</div>
+    <div class="charts-grid">
+
+      <div class="chart-card chart-wide">
+        <h3>Best tok/s vs Baseline — by GPU &amp; Model</h3>
+        <div class="chart-wrapper" style="height:320px">
+          <canvas id="barChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>tok/s vs Model Size (params)</h3>
+        <div class="chart-wrapper" style="height:280px">
+          <canvas id="scatterChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Most-Used Optimization Techniques</h3>
+        <div class="chart-wrapper" style="height:280px">
+          <canvas id="techChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="section">
+    <div class="section-title">All Runs</div>
+    <div class="table-controls">
+      <input type="search" id="search-input" placeholder="Search GPU, model, contributor…">
+      <label>GPU family:</label>
+      <select id="family-filter">
+        <option value="">All</option>
+        <option>Ada Lovelace</option>
+        <option>Hopper</option>
+        <option>Ampere</option>
+        <option>Turing</option>
+        <option>Volta</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table id="runs-table">
+        <thead>
+          <tr>
+            <th data-col="rank">#</th>
+            <th data-col="contributor">Contributor</th>
+            <th data-col="gpu">GPU</th>
+            <th data-col="vram_gb">VRAM</th>
+            <th data-col="model">Model</th>
+            <th data-col="params_b">Params</th>
+            <th data-col="baseline_tok_s">Baseline tok/s</th>
+            <th data-col="best_tok_s" class="sorted-desc">Best tok/s</th>
+            <th data-col="gain_pct">Gain</th>
+            <th data-col="ttft_ms">TTFT ms</th>
+            <th data-col="vram_used_gb">VRAM used</th>
+            <th data-col="experiments">Expts</th>
+            <th data-col="techniques">Techniques</th>
+            <th data-col="submitted_at">Date</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  autoresearch-inference &nbsp;·&nbsp; Submit your run with
+  <code>uv run submit_run.py</code>, then open a PR.
+</footer>
+
+<script>
+// ---- Data ----
+const ROWS = [{"run_id": "rtx4090-qwen0-5b-20260322", "contributor": "shashb27", "gpu": "RTX 4090", "gpu_family": "Ada Lovelace", "vram_gb": 24.0, "model": "Qwen2.5-0.5B", "params_b": 0.5, "baseline_tok_s": 145.79, "best_tok_s": 275.14, "gain_pct": 88.7, "ttft_ms": 3.6, "vram_used_gb": 1.0, "experiments": 13, "techniques": "bf16, custom_decode_loop, torch_compile, dynamo_cache_tuning", "submitted_at": "2026-03-22"}, {"run_id": "rtx4070-qwen0-5b-20260323", "contributor": "hobbyist-ml", "gpu": "RTX 4070", "gpu_family": "Ada Lovelace", "vram_gb": 12.0, "model": "Qwen2.5-0.5B", "params_b": 0.5, "baseline_tok_s": 118.4, "best_tok_s": 219.7, "gain_pct": 85.6, "ttft_ms": 4.5, "vram_used_gb": 1.0, "experiments": 14, "techniques": "bf16, custom_decode_loop, torch_compile, dynamo_cache_tuning", "submitted_at": "2026-03-23"}, {"run_id": "h100-qwen7b-20260319", "contributor": "gpu-research-lab", "gpu": "H100 SXM5 80GB", "gpu_family": "Hopper", "vram_gb": 80.0, "model": "Qwen2.5-7B", "params_b": 7.0, "baseline_tok_s": 95.3, "best_tok_s": 214.6, "gain_pct": 125.2, "ttft_ms": 4.7, "vram_used_gb": 15.1, "experiments": 22, "techniques": "bf16, flash_attention_2, fp8_quantization, torch_compile, custom_decode_loop", "submitted_at": "2026-03-19"}, {"run_id": "a100-40gb-qwen7b-20260318", "contributor": "cloud-runner", "gpu": "A100-SXM4-40GB", "gpu_family": "Ampere", "vram_gb": 40.0, "model": "Qwen2.5-7B", "params_b": 7.0, "baseline_tok_s": 61.4, "best_tok_s": 118.7, "gain_pct": 93.3, "ttft_ms": 8.4, "vram_used_gb": 14.6, "experiments": 20, "techniques": "bf16, flash_attention_2, torch_compile, custom_decode_loop", "submitted_at": "2026-03-18"}, {"run_id": "a100-40gb-llama8b-20260316", "contributor": "inference-bench", "gpu": "A100-SXM4-40GB", "gpu_family": "Ampere", "vram_gb": 40.0, "model": "Llama-3.1-8B", "params_b": 8.0, "baseline_tok_s": 54.2, "best_tok_s": 108.9, "gain_pct": 100.9, "ttft_ms": 9.2, "vram_used_gb": 16.4, "experiments": 17, "techniques": "bf16, flash_attention_2, torch_compile, custom_decode_loop", "submitted_at": "2026-03-16"}, {"run_id": "rtx4090-qwen7b-20260320", "contributor": "ml-optimizer", "gpu": "RTX 4090", "gpu_family": "Ada Lovelace", "vram_gb": 24.0, "model": "Qwen2.5-7B", "params_b": 7.0, "baseline_tok_s": 38.2, "best_tok_s": 67.4, "gain_pct": 76.4, "ttft_ms": 14.8, "vram_used_gb": 14.2, "experiments": 15, "techniques": "bf16, flash_attention_2, int8_quantization, torch_compile", "submitted_at": "2026-03-20"}, {"run_id": "rtx3060ti-qwen0-5b-20260317", "contributor": "shashb27", "gpu": "RTX 3060 Ti", "gpu_family": "Ampere", "vram_gb": 8.0, "model": "Qwen2.5-0.5B", "params_b": 0.5, "baseline_tok_s": 57.6, "best_tok_s": 61.63, "gain_pct": 6.9, "ttft_ms": 16.2, "vram_used_gb": 1.1, "experiments": 18, "techniques": "bf16, min_new_tokens_skip, torch_compile, return_dict_false", "submitted_at": "2026-03-17"}, {"run_id": "h100-llama70b-20260321", "contributor": "gpu-research-lab", "gpu": "H100 SXM5 80GB", "gpu_family": "Hopper", "vram_gb": 80.0, "model": "Llama-3.1-70B", "params_b": 70.0, "baseline_tok_s": 12.8, "best_tok_s": 28.4, "gain_pct": 121.9, "ttft_ms": 34.6, "vram_used_gb": 38.2, "experiments": 18, "techniques": "bf16, flash_attention_2, fp8_quantization, torch_compile", "submitted_at": "2026-03-21"}];
+const CHART = {"bar": {"labels": ["RTX 4090\nQwen2.5-0.5B", "RTX 4070\nQwen2.5-0.5B", "H100 SXM5 80GB\nQwen2.5-7B", "A100-SXM4-40GB\nQwen2.5-7B", "A100-SXM4-40GB\nLlama-3.1-8B", "RTX 4090\nQwen2.5-7B", "RTX 3060 Ti\nQwen2.5-0.5B", "H100 SXM5 80GB\nLlama-3.1-70B"], "baseline": [145.79, 118.4, 95.3, 61.4, 54.2, 38.2, 57.6, 12.8], "best": [275.14, 219.7, 214.6, 118.7, 108.9, 67.4, 61.63, 28.4], "gain": [88.7, 85.6, 125.2, 93.3, 100.9, 76.4, 6.9, 121.9], "colors": ["#10b981", "#10b981", "#6366f1", "#3b82f6", "#3b82f6", "#10b981", "#3b82f6", "#6366f1"]}, "scatter": [{"x": 8.0, "y": 108.9, "gpu": "A100-SXM4-40GB", "model": "Llama-3.1-8B", "gain": 100.9}, {"x": 7.0, "y": 118.7, "gpu": "A100-SXM4-40GB", "model": "Qwen2.5-7B", "gain": 93.3}, {"x": 70.0, "y": 28.4, "gpu": "H100 SXM5 80GB", "model": "Llama-3.1-70B", "gain": 121.9}, {"x": 7.0, "y": 214.6, "gpu": "H100 SXM5 80GB", "model": "Qwen2.5-7B", "gain": 125.2}, {"x": 0.5, "y": 61.63, "gpu": "RTX 3060 Ti", "model": "Qwen2.5-0.5B", "gain": 6.9}, {"x": 0.5, "y": 219.7, "gpu": "RTX 4070", "model": "Qwen2.5-0.5B", "gain": 85.6}, {"x": 0.5, "y": 275.14, "gpu": "RTX 4090", "model": "Qwen2.5-0.5B", "gain": 88.7}, {"x": 7.0, "y": 67.4, "gpu": "RTX 4090", "model": "Qwen2.5-7B", "gain": 76.4}], "techniques": {"labels": ["bf16", "torch_compile", "flash_attention_2", "custom_decode_loop", "fp8_quantization", "dynamo_cache_tuning", "min_new_tokens_skip", "return_dict_false", "int8_quantization"], "counts": [8, 8, 5, 5, 2, 2, 1, 1, 1]}};
+
+// ---- Family colors ----
+const FAMILY_COLORS = {
+  "Ada Lovelace": "#10b981",
+  "Hopper":       "#6366f1",
+  "Ampere":       "#3b82f6",
+  "Turing":       "#f59e0b",
+  "Volta":        "#ef4444",
+};
+const familyColor = f => FAMILY_COLORS[f] || "#8b5cf6";
+
+// ---- Chart.js defaults ----
+Chart.defaults.color = "#8892a4";
+Chart.defaults.borderColor = "#2e3150";
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+Chart.defaults.font.size = 12;
+
+// ---- Bar chart ----
+(function() {
+  const ctx = document.getElementById("barChart").getContext("2d");
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: CHART.bar.labels,
+      datasets: [
+        {
+          label: "Baseline tok/s",
+          data: CHART.bar.baseline,
+          backgroundColor: "rgba(99,102,241,0.35)",
+          borderColor: "rgba(99,102,241,0.7)",
+          borderWidth: 1,
+          borderRadius: 3,
+        },
+        {
+          label: "Best tok/s",
+          data: CHART.bar.best,
+          backgroundColor: CHART.bar.colors.map(c => c + "cc"),
+          borderColor: CHART.bar.colors,
+          borderWidth: 1,
+          borderRadius: 3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "top", labels: { boxWidth: 12, padding: 16 } },
+        tooltip: {
+          callbacks: {
+            afterBody: (items) => {
+              const i = items[0].dataIndex;
+              return [`Gain: +${CHART.bar.gain[i]}%`];
+            },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 30, font: { size: 11 } } },
+        y: { title: { display: true, text: "tok/s" }, grid: { color: "#2e3150" } },
+      },
+    },
+  });
+})();
+
+// ---- Scatter chart ----
+(function() {
+  const ctx = document.getElementById("scatterChart").getContext("2d");
+  // Group by GPU family for color
+  const datasets = {};
+  CHART.scatter.forEach(p => {
+    const family = (function() {
+      // Guess family from known GPU names — using the gpu field in scatter
+      for (const [k, v] of Object.entries(FAMILY_COLORS)) {
+        // We don't have family here directly; use the ROWS lookup
+        const row = ROWS.find(r => r.model === p.model && r.gpu.includes(p.gpu.split(" ")[0]));
+        if (row) return row.gpu_family;
+      }
+      return "Other";
+    })();
+    if (!datasets[family]) {
+      datasets[family] = {
+        label: family,
+        data: [],
+        backgroundColor: (familyColor(family) + "bb"),
+        borderColor: familyColor(family),
+        pointRadius: 7,
+        pointHoverRadius: 9,
+      };
+    }
+    datasets[family].data.push({ x: p.x, y: p.y, gpu: p.gpu, model: p.model, gain: p.gain });
+  });
+
+  new Chart(ctx, {
+    type: "scatter",
+    data: { datasets: Object.values(datasets) },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "top", labels: { boxWidth: 10, padding: 12 } },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const d = item.raw;
+              return [`${d.gpu} / ${d.model}`, `${d.x}B params → ${d.y} tok/s (+${d.gain}%)`];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: "Model params (B)" },
+          grid: { color: "#2e3150" },
+          type: "logarithmic",
+        },
+        y: {
+          title: { display: true, text: "Best tok/s" },
+          grid: { color: "#2e3150" },
+        },
+      },
+    },
+  });
+})();
+
+// ---- Techniques chart ----
+(function() {
+  const ctx = document.getElementById("techChart").getContext("2d");
+  const palette = ["#6366f1","#10b981","#3b82f6","#f59e0b","#ef4444","#8b5cf6",
+                   "#06b6d4","#84cc16","#f97316","#ec4899","#14b8a6","#a855f7"];
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: CHART.techniques.labels,
+      datasets: [{
+        label: "Runs using technique",
+        data: CHART.techniques.counts,
+        backgroundColor: palette.slice(0, CHART.techniques.labels.length).map(c => c + "cc"),
+        borderColor:     palette.slice(0, CHART.techniques.labels.length),
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: "#2e3150" }, ticks: { stepSize: 1 } },
+        y: { grid: { display: false }, ticks: { font: { family: "'JetBrains Mono','Fira Code',monospace", size: 11 } } },
+      },
+    },
+  });
+})();
+
+// ---- Table rendering ----
+let sortCol = "best_tok_s";
+let sortDir = -1; // -1 = desc
+let filterText = "";
+let filterFamily = "";
+
+function gainClass(pct) {
+  if (pct >= 50) return "high";
+  if (pct >= 15) return "medium";
+  return "low";
+}
+
+function rankBadge(i) {
+  if (i === 0) return '<span class="rank-badge gold">1</span>';
+  if (i === 1) return '<span class="rank-badge silver">2</span>';
+  if (i === 2) return '<span class="rank-badge bronze">3</span>';
+  return `<span class="rank-badge">${i+1}</span>`;
+}
+
+function familyDot(family) {
+  return `<span class="family-dot" style="background:${familyColor(family)}"></span>`;
+}
+
+function renderTable() {
+  const q = filterText.toLowerCase();
+  let data = ROWS.filter(r => {
+    if (filterFamily && r.gpu_family !== filterFamily) return false;
+    if (q && !(
+      r.gpu.toLowerCase().includes(q) ||
+      r.model.toLowerCase().includes(q) ||
+      r.contributor.toLowerCase().includes(q) ||
+      r.techniques.toLowerCase().includes(q)
+    )) return false;
+    return true;
+  });
+
+  const numericCols = new Set(["vram_gb","params_b","baseline_tok_s","best_tok_s","gain_pct","ttft_ms","vram_used_gb","experiments"]);
+  data.sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (numericCols.has(sortCol)) { av = Number(av); bv = Number(bv); }
+    if (av < bv) return sortDir;
+    if (av > bv) return -sortDir;
+    return 0;
+  });
+
+  const tbody = document.getElementById("table-body");
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="14" class="no-results">No matching runs.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map((r, i) => `
+    <tr>
+      <td>${rankBadge(i)}</td>
+      <td>${r.contributor}</td>
+      <td>${familyDot(r.gpu_family)}${r.gpu}</td>
+      <td class="mono">${r.vram_gb} GB</td>
+      <td class="mono">${r.model}</td>
+      <td class="mono">${r.params_b}B</td>
+      <td class="mono">${r.baseline_tok_s.toFixed(2)}</td>
+      <td class="mono" style="color:#e2e8f0;font-weight:600">${r.best_tok_s.toFixed(2)}</td>
+      <td><span class="gain-pill ${gainClass(r.gain_pct)}">+${r.gain_pct}%</span></td>
+      <td class="mono">${r.ttft_ms}</td>
+      <td class="mono">${r.vram_used_gb} GB</td>
+      <td class="mono">${r.experiments}</td>
+      <td><div class="tech-list" title="${r.techniques}">${r.techniques}</div></td>
+      <td class="mono">${r.submitted_at}</td>
+    </tr>
+  `).join("");
+}
+
+// Sort on header click
+document.querySelectorAll("thead th[data-col]").forEach(th => {
+  th.addEventListener("click", () => {
+    const col = th.dataset.col;
+    if (col === "rank") return;
+    if (sortCol === col) {
+      sortDir = -sortDir;
+    } else {
+      sortCol = col;
+      sortDir = -1;
+    }
+    document.querySelectorAll("thead th").forEach(h => h.classList.remove("sorted-asc","sorted-desc"));
+    th.classList.add(sortDir === -1 ? "sorted-desc" : "sorted-asc");
+    renderTable();
+  });
+});
+
+document.getElementById("search-input").addEventListener("input", e => {
+  filterText = e.target.value;
+  renderTable();
+});
+document.getElementById("family-filter").addEventListener("change", e => {
+  filterFamily = e.target.value;
+  renderTable();
+});
+
+renderTable();
+</script>
+</body>
+</html>

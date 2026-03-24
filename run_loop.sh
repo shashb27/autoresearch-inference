@@ -91,7 +91,17 @@ else
     echo "No results yet — skipping plots."
 fi
 
-# Step 6: Final commit
+# Step 6: Update leaderboard (if a submission exists)
+echo ""
+echo "--- Leaderboard ---"
+if ls leaderboard/runs/*.json 2>/dev/null | grep -q .; then
+    uv run leaderboard.py
+    git add leaderboard/index.html 2>/dev/null || true
+else
+    echo "No leaderboard submissions yet — run 'uv run submit_run.py' to add one."
+fi
+
+# Step 7: Final commit
 echo ""
 echo "--- Final Commit ---"
 git add LEARNINGS.md results.tsv 2>/dev/null || true
