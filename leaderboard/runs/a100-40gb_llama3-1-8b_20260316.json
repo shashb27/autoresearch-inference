@@ -1,0 +1,54 @@
+{
+  "run_id": "a100-40gb-llama8b-20260316",
+  "submitted_at": "2026-03-16T11:05:00Z",
+  "contributor": "inference-bench",
+  "branch": "autoresearch/mar16-llama8b",
+  "hardware": {
+    "gpu_name": "NVIDIA A100-SXM4-40GB",
+    "gpu_family": "Ampere",
+    "compute_capability": "8.0",
+    "vram_total_gb": 40.0,
+    "cuda_version": "12.3",
+    "bf16_supported": true,
+    "fp8_supported": false
+  },
+  "model": {
+    "id": "meta-llama/Llama-3.1-8B",
+    "params_b": 8.0,
+    "family": "Llama 3.1"
+  },
+  "results": {
+    "baseline_tok_s": 54.2,
+    "best_tok_s": 108.9,
+    "gain_pct": 100.9,
+    "best_ttft_ms": 9.2,
+    "best_vram_gb": 16.4,
+    "total_experiments": 17,
+    "keep_count": 5,
+    "discard_count": 10,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "BF16 + Flash Attention 2 + torch.compile(dynamic=True) + custom decode loop",
+    "techniques": ["bf16", "flash_attention_2", "torch_compile", "custom_decode_loop"]
+  },
+  "experiments": [
+    {"n": 0,  "tok_s": 54.2,  "status": "keep",    "description": "baseline: FP16 + SDPA + compile default"},
+    {"n": 1,  "tok_s": 60.8,  "status": "keep",    "description": "BF16 dtype"},
+    {"n": 2,  "tok_s": 76.4,  "status": "keep",    "description": "BF16 + Flash Attention 2"},
+    {"n": 3,  "tok_s": 74.2,  "status": "discard", "description": "FA2 + INT8 torchao (minor regression)"},
+    {"n": 4,  "tok_s": 80.6,  "status": "keep",    "description": "BF16 + FA2 + compile dynamic=True"},
+    {"n": 5,  "tok_s": 79.4,  "status": "discard", "description": "dynamo cache=128"},
+    {"n": 6,  "tok_s": 82.3,  "status": "discard", "description": "INT8 + FA2 + compile"},
+    {"n": 7,  "tok_s": 94.6,  "status": "discard", "description": "custom decode + FA2 + compile"},
+    {"n": 8,  "tok_s": 108.9, "status": "keep",    "description": "BF16+FA2+compile(dynamic)+custom decode"},
+    {"n": 9,  "tok_s": 106.2, "status": "discard", "description": "return_dict=False"},
+    {"n": 10, "tok_s": 107.8, "status": "discard", "description": "pin_memory input"},
+    {"n": 11, "tok_s": 0.0,   "status": "crash",   "description": "CUDA graphs variable length crash"},
+    {"n": 12, "tok_s": 105.4, "status": "discard", "description": "no EOS check"},
+    {"n": 13, "tok_s": 0.0,   "status": "crash",   "description": "torch.compile fullgraph Triton error"},
+    {"n": 14, "tok_s": 107.6, "status": "discard", "description": "preallocated output buffer"},
+    {"n": 15, "tok_s": 106.8, "status": "discard", "description": "dynamo cache=32"},
+    {"n": 16, "tok_s": 108.4, "status": "discard", "description": "torch.backends.cudnn.benchmark=True"}
+  ]
+}

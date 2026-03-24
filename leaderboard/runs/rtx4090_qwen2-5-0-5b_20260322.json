@@ -1,0 +1,50 @@
+{
+  "run_id": "rtx4090-qwen0-5b-20260322",
+  "submitted_at": "2026-03-22T18:41:00Z",
+  "contributor": "shashb27",
+  "branch": "autoresearch/mar22-4090",
+  "hardware": {
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_family": "Ada Lovelace",
+    "compute_capability": "8.9",
+    "vram_total_gb": 24.0,
+    "cuda_version": "12.4",
+    "bf16_supported": true,
+    "fp8_supported": true
+  },
+  "model": {
+    "id": "Qwen/Qwen2.5-0.5B",
+    "params_b": 0.5,
+    "family": "Qwen2.5"
+  },
+  "results": {
+    "baseline_tok_s": 145.79,
+    "best_tok_s": 275.14,
+    "gain_pct": 88.7,
+    "best_ttft_ms": 3.63,
+    "best_vram_gb": 1.0,
+    "total_experiments": 13,
+    "keep_count": 4,
+    "discard_count": 7,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "BF16 + custom decode loop + torch.compile(dynamic=True) + dynamo cache=64",
+    "techniques": ["bf16", "custom_decode_loop", "torch_compile", "dynamo_cache_tuning"]
+  },
+  "experiments": [
+    {"n": 0, "tok_s": 145.79, "status": "keep", "description": "baseline: FP16 + SDPA + compile default"},
+    {"n": 1, "tok_s": 145.58, "status": "discard", "description": "BF16 dtype"},
+    {"n": 2, "tok_s": 141.59, "status": "discard", "description": "TF32 + min_new_tokens + use_cache"},
+    {"n": 3, "tok_s": 143.22, "status": "discard", "description": "TF32 matmul precision only"},
+    {"n": 4, "tok_s": 144.73, "status": "discard", "description": "custom decode + no compile"},
+    {"n": 5, "tok_s": 0.0,    "status": "crash",   "description": "custom decode + reduce-overhead"},
+    {"n": 6, "tok_s": 201.75, "status": "keep",    "description": "custom decode + compile + dynamo cache=64"},
+    {"n": 7, "tok_s": 266.26, "status": "keep",    "description": "custom decode + compile dynamic=True"},
+    {"n": 8, "tok_s": 275.14, "status": "keep",    "description": "BF16 + custom decode + dynamic compile"},
+    {"n": 9, "tok_s": 0.0,    "status": "crash",   "description": "max-autotune (missing setuptools)"},
+    {"n": 10,"tok_s": 268.68, "status": "discard", "description": "preallocated output buffer"},
+    {"n": 11,"tok_s": 263.45, "status": "discard", "description": "float32 matmul precision high"},
+    {"n": 12,"tok_s": 225.62, "status": "discard", "description": "INT8 weight-only (torchao)"}
+  ]
+}

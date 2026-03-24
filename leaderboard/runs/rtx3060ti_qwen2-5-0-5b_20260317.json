@@ -1,0 +1,55 @@
+{
+  "run_id": "rtx3060ti-qwen0-5b-20260317",
+  "submitted_at": "2026-03-17T22:15:00Z",
+  "contributor": "shashb27",
+  "branch": "autoresearch/mar17",
+  "hardware": {
+    "gpu_name": "NVIDIA GeForce RTX 3060 Ti",
+    "gpu_family": "Ampere",
+    "compute_capability": "8.6",
+    "vram_total_gb": 8.0,
+    "cuda_version": "12.1",
+    "bf16_supported": true,
+    "fp8_supported": false
+  },
+  "model": {
+    "id": "Qwen/Qwen2.5-0.5B",
+    "params_b": 0.5,
+    "family": "Qwen2.5"
+  },
+  "results": {
+    "baseline_tok_s": 57.6,
+    "best_tok_s": 61.63,
+    "gain_pct": 6.9,
+    "best_ttft_ms": 16.2,
+    "best_vram_gb": 1.1,
+    "total_experiments": 18,
+    "keep_count": 5,
+    "discard_count": 11,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "BF16 + min_new_tokens=max + use_cache=True + return_dict=False + compile default",
+    "techniques": ["bf16", "min_new_tokens_skip", "torch_compile", "return_dict_false"]
+  },
+  "experiments": [
+    {"n": 0, "tok_s": 57.6,  "status": "keep",    "description": "baseline: FP16 + SDPA + compile default"},
+    {"n": 1, "tok_s": 61.3,  "status": "keep",    "description": "BF16 dtype"},
+    {"n": 2, "tok_s": 61.6,  "status": "keep",    "description": "min_new_tokens = max_new_tokens"},
+    {"n": 3, "tok_s": 60.9,  "status": "keep",    "description": "TF32 matmul precision"},
+    {"n": 4, "tok_s": 58.0,  "status": "discard", "description": "reduce-overhead mode"},
+    {"n": 5, "tok_s": 58.8,  "status": "discard", "description": "max-autotune"},
+    {"n": 6, "tok_s": 60.2,  "status": "discard", "description": "fullgraph=True"},
+    {"n": 7, "tok_s": 59.3,  "status": "discard", "description": "BF16 eager (no compile)"},
+    {"n": 8, "tok_s": 58.4,  "status": "discard", "description": "BetterTransformer"},
+    {"n": 9, "tok_s": 35.0,  "status": "discard", "description": "INT8 weight-only (torchao)"},
+    {"n": 10,"tok_s": 0.0,   "status": "crash",   "description": "INT4 missing mslk>=1.0.0"},
+    {"n": 11,"tok_s": 0.0,   "status": "crash",   "description": "static cache + compile Triton error"},
+    {"n": 12,"tok_s": 61.5,  "status": "keep",    "description": "use_cache=True + return_dict=False"},
+    {"n": 13,"tok_s": 60.5,  "status": "discard", "description": "sdpa with memory_efficient"},
+    {"n": 14,"tok_s": 60.8,  "status": "discard", "description": "batch_first padding"},
+    {"n": 15,"tok_s": 61.4,  "status": "discard", "description": "pin_memory input tensors"},
+    {"n": 16,"tok_s": 61.2,  "status": "discard", "description": "no_grad context manager"},
+    {"n": 17,"tok_s": 61.63, "status": "keep",    "description": "combined: BF16 + min_new_tokens + return_dict=False"}
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "run_id": "rtx4070-qwen0-5b-20260323",
+  "submitted_at": "2026-03-23T16:48:00Z",
+  "contributor": "hobbyist-ml",
+  "branch": "autoresearch/mar23-4070",
+  "hardware": {
+    "gpu_name": "NVIDIA GeForce RTX 4070",
+    "gpu_family": "Ada Lovelace",
+    "compute_capability": "8.9",
+    "vram_total_gb": 12.0,
+    "cuda_version": "12.4",
+    "bf16_supported": true,
+    "fp8_supported": true
+  },
+  "model": {
+    "id": "Qwen/Qwen2.5-0.5B",
+    "params_b": 0.5,
+    "family": "Qwen2.5"
+  },
+  "results": {
+    "baseline_tok_s": 118.4,
+    "best_tok_s": 219.7,
+    "gain_pct": 85.6,
+    "best_ttft_ms": 4.5,
+    "best_vram_gb": 1.0,
+    "total_experiments": 14,
+    "keep_count": 4,
+    "discard_count": 8,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "BF16 + custom decode loop + torch.compile(dynamic=True) + dynamo cache=64",
+    "techniques": ["bf16", "custom_decode_loop", "torch_compile", "dynamo_cache_tuning"]
+  },
+  "experiments": [
+    {"n": 0,  "tok_s": 118.4, "status": "keep",    "description": "baseline: FP16 + SDPA + compile default"},
+    {"n": 1,  "tok_s": 119.2, "status": "discard", "description": "BF16 (marginal gain, re-test)"},
+    {"n": 2,  "tok_s": 121.8, "status": "discard", "description": "TF32 matmul"},
+    {"n": 3,  "tok_s": 142.6, "status": "keep",    "description": "custom decode + compile + dynamo cache=64"},
+    {"n": 4,  "tok_s": 188.4, "status": "keep",    "description": "custom decode + compile dynamic=True"},
+    {"n": 5,  "tok_s": 186.1, "status": "discard", "description": "add BF16 (slight regression this round)"},
+    {"n": 6,  "tok_s": 219.7, "status": "keep",    "description": "BF16 + custom decode + dynamic compile"},
+    {"n": 7,  "tok_s": 0.0,   "status": "crash",   "description": "max-autotune setuptools missing"},
+    {"n": 8,  "tok_s": 215.4, "status": "discard", "description": "preallocated buffer"},
+    {"n": 9,  "tok_s": 0.0,   "status": "crash",   "description": "reduce-overhead CUDA graph conflict"},
+    {"n": 10, "tok_s": 217.8, "status": "discard", "description": "return_dict=False"},
+    {"n": 11, "tok_s": 218.2, "status": "discard", "description": "dynamo cache=128"},
+    {"n": 12, "tok_s": 216.9, "status": "discard", "description": "INT8 torchao (overhead at 0.5B)"},
+    {"n": 13, "tok_s": 219.1, "status": "discard", "description": "no EOS check"}
+  ]
+}

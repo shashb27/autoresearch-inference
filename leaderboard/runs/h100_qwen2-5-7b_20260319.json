@@ -1,0 +1,59 @@
+{
+  "run_id": "h100-qwen7b-20260319",
+  "submitted_at": "2026-03-19T08:55:00Z",
+  "contributor": "gpu-research-lab",
+  "branch": "autoresearch/mar19-h100",
+  "hardware": {
+    "gpu_name": "NVIDIA H100 SXM5 80GB",
+    "gpu_family": "Hopper",
+    "compute_capability": "9.0",
+    "vram_total_gb": 80.0,
+    "cuda_version": "12.4",
+    "bf16_supported": true,
+    "fp8_supported": true
+  },
+  "model": {
+    "id": "Qwen/Qwen2.5-7B",
+    "params_b": 7.0,
+    "family": "Qwen2.5"
+  },
+  "results": {
+    "baseline_tok_s": 95.3,
+    "best_tok_s": 214.6,
+    "gain_pct": 125.2,
+    "best_ttft_ms": 4.7,
+    "best_vram_gb": 15.1,
+    "total_experiments": 22,
+    "keep_count": 6,
+    "discard_count": 14,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "BF16 + Flash Attention 2 + FP8 weight (torchao) + torch.compile(dynamic=True) + custom decode",
+    "techniques": ["bf16", "flash_attention_2", "fp8_quantization", "torch_compile", "custom_decode_loop"]
+  },
+  "experiments": [
+    {"n": 0,  "tok_s": 95.3,  "status": "keep",    "description": "baseline: FP16 + SDPA + compile default"},
+    {"n": 1,  "tok_s": 108.4, "status": "keep",    "description": "BF16 dtype"},
+    {"n": 2,  "tok_s": 132.8, "status": "keep",    "description": "BF16 + Flash Attention 2"},
+    {"n": 3,  "tok_s": 141.6, "status": "keep",    "description": "BF16 + FA2 + compile dynamic=True"},
+    {"n": 4,  "tok_s": 138.2, "status": "discard", "description": "INT8 torchao"},
+    {"n": 5,  "tok_s": 155.3, "status": "discard", "description": "FP8 torchao e4m3"},
+    {"n": 6,  "tok_s": 168.4, "status": "keep",    "description": "BF16 + FA2 + FP8 weights + compile"},
+    {"n": 7,  "tok_s": 164.2, "status": "discard", "description": "FP8 + reduce-overhead mode"},
+    {"n": 8,  "tok_s": 171.6, "status": "discard", "description": "FP8 + custom decode + no compile"},
+    {"n": 9,  "tok_s": 185.3, "status": "discard", "description": "FP8 + custom decode + compile"},
+    {"n": 10, "tok_s": 192.4, "status": "discard", "description": "FP8 + FA2 + custom decode + compile"},
+    {"n": 11, "tok_s": 0.0,   "status": "crash",   "description": "CUDA graphs with FP8"},
+    {"n": 12, "tok_s": 198.6, "status": "discard", "description": "FP8 + FA2 + dynamo cache=64"},
+    {"n": 13, "tok_s": 214.6, "status": "keep",    "description": "BF16+FA2+FP8+compile(dynamic)+custom decode"},
+    {"n": 14, "tok_s": 210.8, "status": "discard", "description": "add return_dict=False"},
+    {"n": 15, "tok_s": 212.1, "status": "discard", "description": "pinned memory"},
+    {"n": 16, "tok_s": 0.0,   "status": "crash",   "description": "max-autotune OOM on FP8"},
+    {"n": 17, "tok_s": 213.4, "status": "discard", "description": "dynamo cache=128"},
+    {"n": 18, "tok_s": 211.9, "status": "discard", "description": "INT4 on top of FP8"},
+    {"n": 19, "tok_s": 213.0, "status": "discard", "description": "no EOS check"},
+    {"n": 20, "tok_s": 214.2, "status": "discard", "description": "torch.backends.cuda.matmul.allow_tf32"},
+    {"n": 21, "tok_s": 213.8, "status": "discard", "description": "pre-allocate logits buffer"}
+  ]
+}
