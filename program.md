@@ -23,7 +23,7 @@ Your goal: **maximize tokens/second (tok_s)** for the configured model on the se
    ```bash
    uv run prepare.py --profile
    ```
-   This writes `profile.txt`. **Read it carefully.** The profile is your primary input for deciding what to try.
+   This writes `profile.txt` with the **full** profiler table (top 50 ops, no truncation). **Read it carefully.** The profile is your primary input for deciding what to try.
 
 4. **Write a bottleneck analysis** — before touching `infer.py`, write a short analysis (to stdout) in this format:
    ```
@@ -48,21 +48,59 @@ Your goal: **maximize tokens/second (tok_s)** for the configured model on the se
 - If the predicted gain is < 3%, skip it — the noise floor is too high to measure reliably
 
 **Each experiment:**
-1. Modify `infer.py` based on your hypothesis
-2. `git commit -am "experiment: <description>"`
-3. `uv run infer.py > run.log 2>&1`
-4. Read results: `grep "^tok_s:\|^ttft_ms:\|^peak_vram_gb:" run.log`
-5. Record in `results.tsv`
-6. Keep or revert:
+1. Validate `infer.py` still has a correct interface:
+   ```bash
+   uv run prepare.py --validate
+   ```
+   If it fails, fix the issue before benchmarking.
+2. Modify `infer.py` based on your hypothesis
+3. `git commit -am "experiment: <description>"`
+4. `uv run infer.py > run.log 2>&1`
+5. Read results: `grep "^tok_s:\|^ttft_ms:\|^peak_vram_gb:" run.log`
+6. Check for failures: `grep "^oom_count:\|^timeout_count:" run.log`
+7. Record in `results.tsv`
+8. Keep or revert:
    - **KEEP** if composite score (`tok_s × valid_ratio`) improves
    - **DISCARD** (`git reset HEAD~1 --hard`) if same or worse
-   - **CRASH** if run fails — log it and move on
+   - **CRASH / OOM** — the benchmark auto-recovers per-prompt; if `oom_count > 0` treat as discard
 
 **VRAM limit**: must stay under `config.json` limit. Over-limit = discard.
 
 **Simplicity**: all else equal, simpler code wins. Removing code while keeping speed is a good outcome.
 
 **Never stop**: do not ask "should I continue?". Run until manually interrupted. If you run out of ideas, re-profile and look harder.
+
+---
+
+## generate_fn interface
+
+Your `infer.py` must expose:
+```python
+def run_inference() -> tuple[Callable, tokenizer]:
+    ...
+```
+
+Your `generate_fn` can return either:
+- `output_ids: torch.Tensor` — legacy, still accepted
+- `(output_ids: torch.Tensor, metadata: dict)` — **preferred**
+
+If returning metadata, include `"ttft_ms": float` for true first-token latency:
+```python
+@torch.inference_mode()
+def generate_fn(input_ids: torch.Tensor):
+    t_start = time.perf_counter()
+    ttft_ms = None
+    # ... generation loop ...
+    for step in range(MAX_NEW_TOKENS):
+        outputs = model(...)
+        if step == 0:
+            torch.cuda.synchronize()
+            ttft_ms = (time.perf_counter() - t_start) * 1000
+        # ...
+    return generated, {"ttft_ms": ttft_ms}
+```
+
+The benchmark harness handles both forms automatically.
 
 ---
 
@@ -81,15 +119,14 @@ Your goal: **maximize tokens/second (tok_s)** for the configured model on the se
 ### Step 2 — Match hypothesis to hardware
 
 Read `hardware.json` before committing to any approach:
-- Compute capability < 8.0 → BF16 not supported, FP8 not supported — stay FP16
-- Compute capability ≥ 8.0 → BF16 supported, Flash Attention available
-- Compute capability ≥ 9.0 → FP8 natively fast, try torchao FP8
-- VRAM < 10GB → quantization is necessary for 7B+, may hurt small models
+- `bf16_supported: false` → stay FP16, avoid BF16
+- `bf16_supported: true` (Ampere sm_8.0+) → prefer BF16 over FP16
+- `fp8_supported: true` (Hopper sm_9.0+ or Ada sm_8.9) → FP8 is worth trying
+- `fp8_supported: false` → skip FP8 entirely
+- VRAM < 10GB → quantization necessary for 7B+, may hurt small models
 - VRAM ≥ 40GB → full precision likely fine, focus on throughput not memory
 
 ### Step 3 — Prioritize by model scale
-
-Model size changes where the bottleneck lives:
 
 | Model size | Likely bottleneck | Best first experiment |
 |---|---|---|
@@ -115,13 +152,15 @@ After 5 consecutive discards, hard-reset to the best known state and change stra
 - Modify `infer.py` — model loading, dtype, attention backend, quantization, compile settings, generation loop, KV cache, CUDA graphs, custom decode loops
 - Install packages: `uv add <package>` (e.g. `flash-attn`, `bitsandbytes`, `torchao`)
   - Always `git add pyproject.toml uv.lock` so reverts also revert package changes
+- Run `uv run prepare.py --validate` to check your infer.py before benchmarking
+- Run `uv run prepare.py --profile` to re-profile after strategy changes
 
 ## What you CANNOT do
 
 - Modify `prepare.py` — read-only benchmark harness
 - Modify `prompts/prompts.json` — fixed benchmark prompts
 - Change the model (use what's in `config.json`)
-- Produce invalid output (benchmark validates coherence)
+- Produce invalid output (benchmark validates coherence; minimum 25% of max tokens required)
 
 ---
 
@@ -137,9 +176,16 @@ valid_outputs:    20
 invalid_outputs:  0
 ```
 
+OOM or timeout warnings appear as additional lines:
+```
+oom_count:        2
+timeout_count:    0
+WARNING: 2 prompt(s) hit OOM — experiment should be discarded
+```
+
 Extract key metrics:
 ```bash
-grep "^tok_s:\|^ttft_ms:\|^peak_vram_gb:" run.log
+grep "^tok_s:\|^ttft_ms:\|^peak_vram_gb:\|^oom_count:\|^timeout_count:" run.log
 ```
 
 ---
@@ -152,9 +198,10 @@ commit	tok_s	ttft_ms	peak_vram_gb	status	description
 a1b2c3d	70.50	52.1	14.3	keep	baseline: FP16 + SDPA + compile default
 b2c3d4e	85.30	42.1	8.8	keep	INT8 weight-only (torchao) — matmul 60% CUDA time
 c3d4e5f	0.00	0.0	0.0	crash	INT4 missing bitsandbytes
+d4e5f6g	0.00	0.0	0.0	discard	OOM: quantized model too large for VRAM
 ```
 
-Use `0.00` / `0.0` for crashes. Status: `keep`, `discard`, or `crash`.
+Use `0.00` / `0.0` for crashes and OOM discards. Status: `keep`, `discard`, or `crash`.
 
 ---
 
@@ -165,3 +212,5 @@ When stopped:
 2. Generate plots: `uv run analyze.py`
 3. Final commit: `git add LEARNINGS.md plots/ results.tsv && git commit -m "session end: [<tag>]"`
 4. Print summary: best config, what worked, what to try next time
+
+Note: `run_loop.sh` automates steps 2–3 and appends the session row to LEARNINGS.md automatically.
