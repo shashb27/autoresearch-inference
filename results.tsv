@@ -1,1 +1,2 @@
 commit	tok_s	ttft_ms	peak_vram_gb	status	description
+9f5853f	85.36	20.95	14.3	keep	baseline: BF16 + SDPA, no compile (RTX 5090 unsupported)

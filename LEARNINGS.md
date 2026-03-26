@@ -8,16 +8,12 @@ Do NOT reset or delete between runs — it is your long-term memory.
 
 ## Hardware Notes
 
-> Fill in after first `prepare.py` run.
-
-<!--
-Example:
-- GPU: NVIDIA A100 80GB (compute 8.0) — BF16 ✅, FP8 ❌
-- VRAM budget: ~72 GB (90% of 80 GB)
-- BF16 is faster than FP16 on this GPU — always prefer BF16
--->
-
-_Not yet populated._
+- **GPU:** NVIDIA GeForce RTX 5090 (compute 12.0) — BF16 ✅, FP8 ✅
+- **VRAM:** 31.4 GB total, 28.2 GB limit (90%)
+- **CUDA:** 13.0, PyTorch 2.11.0+cu130
+- **Model:** Qwen2.5-7B (7.07B params, GQA 4/28 heads)
+- **torch.compile:** Currently disabled — RTX 5090 compute 12.0 not fully supported yet
+- **Baseline:** 85.36 tok/s @ 14.3GB VRAM (BF16 + SDPA, custom decode loop)
 
 ---
 
