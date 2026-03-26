@@ -1,2 +1,7 @@
 commit	tok_s	ttft_ms	peak_vram_gb	status	description
 9f5853f	85.36	20.95	14.3	keep	baseline: BF16 + SDPA, no compile (RTX 5090 unsupported)
+8ce2533	0.00	0.0	14.2	crash	torch.compile: compilation subprocess crash (RTX 5090 incompatible)
+0ae52a4	0.00	0.0	0.0	crash	flash_attention_2: build failure (CUDA 12.9 vs PyTorch 13.0 mismatch)
+36bc071	37.09	31.18	8.7	discard	INT8 weight-only: -57% throughput (torchao cpp ext incompatible)
+f470e5b	0.00	0.0	0.0	crash	FP8 KV cache: cache_dtype not supported by from_pretrained
+9ca8c8d	85.23	18.59	14.3	discard	Preallocate output buffer: no gain, within noise

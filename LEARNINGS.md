@@ -35,17 +35,15 @@ _Not yet populated._
 
 ## What Doesn't Work (save time, skip these)
 
-> Approaches that crashed, produced garbage, or gave no gain on this hardware.
+**RTX 5090 + PyTorch 2.11.0+cu130 + Qwen2.5-7B environment constraints:**
 
-<!--
-Example:
-- INT4 bitsandbytes → crashes on A100 (missing CUDA kernel for sm_80)
-- fp8 quantization → no gain (GPU doesn't support native FP8)
-- CUDA graphs → unstable with variable-length inputs, not worth debugging
-- vllm → incompatible with current torch version
--->
+- **torch.compile**: Compilation subprocess crashes (compute 12.0 not fully supported yet)
+- **flash_attention_2**: Build failure (CUDA version mismatch: 12.9 vs 13.0)
+- **INT8 weight-only (torchao)**: -57% throughput degradation (cpp extensions incompatible with torch 2.11.0+cu130, falls back to slow Python path)
+- **FP8 KV cache**: `cache_dtype` not supported by `from_pretrained` API
+- **Preallocated output buffer**: No gain over torch.cat (within noise, 85.23 vs 85.36 tok/s)
 
-_Not yet populated._
+**Root cause:** RTX 5090 (compute 12.0) is bleeding-edge hardware; PyTorch/torchao/flash-attn ecosystem not yet fully compatible.
 
 ---
 
