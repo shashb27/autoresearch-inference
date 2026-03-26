@@ -6,6 +6,7 @@ Usage:
     uv run analyze.py --tsv results.tsv      # explicit input
     uv run analyze.py --out my_plots/        # explicit output dir
     uv run analyze.py --show                 # also open plots in browser
+    uv run analyze.py --publish              # generate self-contained report.html
 
 Generates:
     plots/tok_s_progression.png   — speed over time, best-so-far line
@@ -13,9 +14,12 @@ Generates:
     plots/improvement_deltas.png  — % gain per kept experiment vs baseline
     plots/outcomes_donut.png      — keep / discard / crash ratio
     plots/tok_s_vs_ttft.png       — throughput vs latency dual-axis
+    report.html                   — self-contained shareable report (--publish only)
 """
 
 import argparse
+import base64
+import json
 import os
 import sys
 
@@ -344,6 +348,217 @@ def print_summary(df: pd.DataFrame):
 
 
 # ---------------------------------------------------------------------------
+# HTML report (--publish)
+# ---------------------------------------------------------------------------
+
+def _img_to_b64(path: str) -> str:
+    """Encode a PNG file as a base64 data URI."""
+    with open(path, "rb") as f:
+        return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+
+
+def _read_file_safe(path: str, fallback: str = "") -> str:
+    """Read a text file, returning fallback if it doesn't exist."""
+    if os.path.exists(path):
+        with open(path) as f:
+            return f.read()
+    return fallback
+
+
+def publish_report(df: pd.DataFrame, out_dir: str, tsv_path: str) -> str:
+    """Generate a self-contained report.html with embedded plots and data.
+
+    No external dependencies — uses stdlib base64 and string formatting only.
+    All plots are embedded as base64 PNGs so the file is fully portable.
+
+    Returns the path to the generated file.
+    """
+    project_dir = os.path.dirname(os.path.abspath(tsv_path))
+
+    # Load context files
+    config  = _read_file_safe(os.path.join(project_dir, "config.json"),  "{}")
+    hw      = _read_file_safe(os.path.join(project_dir, "hardware.json"), "{}")
+    learnings = _read_file_safe(os.path.join(project_dir, "LEARNINGS.md"), "*(no LEARNINGS.md found)*")
+
+    # Parse for header stats
+    try:
+        cfg = json.loads(config)
+        hw_cfg = json.loads(hw)
+    except Exception:
+        cfg, hw_cfg = {}, {}
+
+    model_id    = cfg.get("model_id", "unknown")
+    params_b    = cfg.get("model_params_b", "?")
+    gpu_name    = hw_cfg.get("gpu_name", "unknown")
+    vram_total  = hw_cfg.get("vram_total_gb", "?")
+
+    keeps = df[df["status"] == "keep"]
+    baseline  = keeps.iloc[0]["tok_s"] if not keeps.empty else 0
+    best      = keeps["tok_s"].max() if not keeps.empty else 0
+    total_gain = (best / baseline - 1) * 100 if baseline > 0 else 0
+    best_desc  = keeps.loc[keeps["tok_s"].idxmax(), "description"] if not keeps.empty else "—"
+
+    # Embed plots
+    plot_names = [
+        "tok_s_progression.png",
+        "improvement_deltas.png",
+        "vram_vs_toks.png",
+        "tok_s_vs_ttft.png",
+        "outcomes_donut.png",
+    ]
+    plot_titles = [
+        "Speed Progression",
+        "Gains Over Baseline",
+        "VRAM vs Throughput",
+        "Throughput vs Latency",
+        "Experiment Outcomes",
+    ]
+    plot_html = ""
+    for name, title in zip(plot_names, plot_titles):
+        path = os.path.join(out_dir, name)
+        if os.path.exists(path):
+            b64 = _img_to_b64(path)
+            plot_html += (
+                f'<div class="plot"><h3>{title}</h3>'
+                f'<img src="{b64}" alt="{title}"></div>\n'
+            )
+
+    # Results table
+    table_rows = ""
+    for _, row in df.iterrows():
+        color = {"keep": "#2ea043", "discard": "#da3633", "crash": "#6e7681"}.get(
+            row["status"], "#8b949e"
+        )
+        table_rows += (
+            f'<tr>'
+            f'<td>{row["experiment_num"]}</td>'
+            f'<td style="color:{color};font-weight:bold">{row["status"]}</td>'
+            f'<td>{row["tok_s"]:.2f}</td>'
+            f'<td>{row["ttft_ms"]:.1f}</td>'
+            f'<td>{row["peak_vram_gb"]:.1f}</td>'
+            f'<td class="desc">{row["description"]}</td>'
+            f'<td class="commit">{str(row["commit"])[:7]}</td>'
+            f'</tr>\n'
+        )
+
+    # Learnings as preformatted text (no markdown parser needed)
+    learnings_html = f'<pre class="learnings">{learnings}</pre>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>autoresearch-inference — {model_id}</title>
+<style>
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0d1117; color: #c9d1d9; margin: 0; padding: 24px;
+    line-height: 1.5;
+  }}
+  h1 {{ color: #f0f6fc; margin-bottom: 4px; }}
+  h2 {{ color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 6px; margin-top: 32px; }}
+  h3 {{ color: #8b949e; margin: 12px 0 6px; }}
+  .meta {{ color: #8b949e; font-size: 0.9em; margin-bottom: 24px; }}
+  .stats {{
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin: 20px 0;
+  }}
+  .stat {{
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 14px; text-align: center;
+  }}
+  .stat .val {{ font-size: 1.8em; font-weight: bold; color: #58a6ff; }}
+  .stat .lbl {{ font-size: 0.8em; color: #8b949e; margin-top: 4px; }}
+  .best-desc {{
+    background: #161b22; border-left: 3px solid #2ea043;
+    padding: 10px 14px; border-radius: 4px; margin: 12px 0; font-family: monospace;
+  }}
+  .plots {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }}
+  .plot {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }}
+  .plot img {{ width: 100%; border-radius: 4px; }}
+  .plot:first-child {{ grid-column: 1 / -1; }}
+  table {{
+    width: 100%; border-collapse: collapse; font-size: 0.88em;
+    background: #161b22; border-radius: 6px; overflow: hidden;
+  }}
+  th {{
+    background: #21262d; color: #8b949e; padding: 8px 10px;
+    text-align: left; border-bottom: 1px solid #30363d;
+  }}
+  td {{ padding: 7px 10px; border-bottom: 1px solid #21262d; }}
+  td.desc {{ max-width: 320px; color: #c9d1d9; }}
+  td.commit {{ font-family: monospace; color: #8b949e; font-size: 0.85em; }}
+  tr:hover td {{ background: #1c2128; }}
+  .context {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }}
+  pre {{
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 14px; overflow-x: auto; font-size: 0.85em; color: #e6edf3;
+  }}
+  .learnings {{ white-space: pre-wrap; word-break: break-word; }}
+  @media (max-width: 700px) {{
+    .plots, .context {{ grid-template-columns: 1fr; }}
+    .plot:first-child {{ grid-column: 1; }}
+  }}
+</style>
+</head>
+<body>
+
+<h1>autoresearch-inference</h1>
+<div class="meta">
+  Model: <strong>{model_id}</strong> (~{params_b}B params) &nbsp;|&nbsp;
+  GPU: <strong>{gpu_name}</strong> ({vram_total} GB VRAM) &nbsp;|&nbsp;
+  {len(df)} experiments
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="val">{baseline:.1f}</div><div class="lbl">Baseline tok/s</div></div>
+  <div class="stat"><div class="val">{best:.1f}</div><div class="lbl">Best tok/s</div></div>
+  <div class="stat"><div class="val">+{total_gain:.1f}%</div><div class="lbl">Total gain</div></div>
+  <div class="stat"><div class="val">{len(keeps)}</div><div class="lbl">Experiments kept</div></div>
+  <div class="stat"><div class="val">{len(df) - len(keeps)}</div><div class="lbl">Discarded / crashed</div></div>
+</div>
+
+<div class="best-desc"><strong>Best config:</strong> {best_desc}</div>
+
+<h2>Plots</h2>
+<div class="plots">
+{plot_html}
+</div>
+
+<h2>All Experiments</h2>
+<table>
+  <thead>
+    <tr>
+      <th>#</th><th>Status</th><th>tok/s</th>
+      <th>TTFT (ms)</th><th>VRAM (GB)</th><th>Description</th><th>Commit</th>
+    </tr>
+  </thead>
+  <tbody>
+{table_rows}
+  </tbody>
+</table>
+
+<h2>Hardware &amp; Config</h2>
+<div class="context">
+  <div><h3>config.json</h3><pre>{config}</pre></div>
+  <div><h3>hardware.json</h3><pre>{hw}</pre></div>
+</div>
+
+<h2>LEARNINGS.md</h2>
+{learnings_html}
+
+</body>
+</html>
+"""
+
+    out_path = os.path.join(project_dir, "report.html")
+    with open(out_path, "w") as f:
+        f.write(html)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -351,9 +566,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="Visualize autoresearch-inference experiment results"
     )
-    parser.add_argument("--tsv",  default="results.tsv", help="Path to results.tsv")
-    parser.add_argument("--out",  default="plots",       help="Output directory for plots")
-    parser.add_argument("--show", action="store_true",   help="Open plots after saving")
+    parser.add_argument("--tsv",     default="results.tsv", help="Path to results.tsv")
+    parser.add_argument("--out",     default="plots",       help="Output directory for plots")
+    parser.add_argument("--show",    action="store_true",   help="Open plots after saving")
+    parser.add_argument("--publish", action="store_true",
+                        help="Generate self-contained report.html with embedded plots")
     args = parser.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
@@ -369,6 +586,11 @@ def main():
     plot_ttft_progression(df,   args.out, args.show)
 
     print(f"\nDone. All plots saved to {args.out}/")
+
+    if args.publish:
+        print("\nGenerating report.html...")
+        report_path = publish_report(df, args.out, args.tsv)
+        print(f"  Report: {os.path.abspath(report_path)}")
 
 
 if __name__ == "__main__":
