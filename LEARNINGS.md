@@ -19,17 +19,7 @@ Do NOT reset or delete between runs — it is your long-term memory.
 
 ## What Works (confirmed gains)
 
-> List techniques that reliably improved tok/s on this hardware.
-> Format: `technique → approx gain | notes`
-
-<!--
-Example:
-- flash_attention_2 → +18–22% | requires `uv add flash-attn`, slow first compile
-- INT8 torchao → +35–45% | some quality loss on math prompts, acceptable
-- torch.compile reduce-overhead → +5–8% | only helps after warmup
--->
-
-_Not yet populated._
+- **FP16 dtype** → +0.1% throughput, -11% TTFT (18.65ms vs 20.95ms) | Marginal gain, but TTFT improvement is real
 
 ---
 
@@ -66,20 +56,18 @@ _Not yet populated._
 
 ## Best Config Found (so far)
 
-> Copy the winning `infer.py` configuration section here for easy reference.
+```python
+DTYPE = torch.float16
+ATTENTION_IMPLEMENTATION = "sdpa"
+USE_TORCH_COMPILE = False  # RTX 5090 not supported
+RETURN_DICT = False
+SKIP_EARLY_STOP = True
+```
 
-<!--
-Example:
-DTYPE = torch.bfloat16
-ATTENTION_IMPLEMENTATION = "flash_attention_2"
-USE_TORCH_COMPILE = True
-COMPILE_MODE = "reduce-overhead"
-QUANTIZATION_ENABLED = True
-QUANTIZATION_TYPE = "int8"
-  → tok/s: 142.3, VRAM: 9.1 GB  (run: mar10, commit: a1b2c3d)
--->
+**Result:** 85.45 tok/s, 18.65ms TTFT, 14.3GB VRAM
+**Commit:** 83350b0 (branch: autoresearch/rtx5090-qwen7b)
 
-_Not yet populated._
+**Improvement:** +0.1% tok/s, -11% TTFT vs baseline (85.36 tok/s, 20.95ms)
 
 ---
 
@@ -89,4 +77,4 @@ _Not yet populated._
 
 | Date | Run tag | Experiments | Best tok/s | Best config |
 |------|---------|-------------|------------|-------------|
-| —    | —       | —           | —          | —           |
+| 2026-03-26 | rtx5090-qwen7b | 8 (torch.compile, flash-attn, INT8, FP8 KV, preallocate, FP16, TF32, EOS) | 85.45 | FP16 + SDPA |
