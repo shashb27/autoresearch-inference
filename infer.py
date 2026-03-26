@@ -57,11 +57,11 @@ MAX_NEW_TOKENS: int = _CFG.get("max_new_tokens", 256)
 # The agent changes these — one or a few per experiment.
 
 # --- Dtype & attention ---
-DTYPE = torch.bfloat16
+DTYPE = torch.float16
 ATTENTION_IMPLEMENTATION: str = "sdpa"   # "sdpa" | "flash_attention_2" | "eager"
 
 # --- Compilation ---
-USE_TORCH_COMPILE: bool  = True
+USE_TORCH_COMPILE: bool  = False  # Disabled: RTX 5090 compute capability 12.0 not yet fully supported
 COMPILE_MODE: str        = "default"     # "default" | "reduce-overhead" | "max-autotune"
 COMPILE_BACKEND: str     = "inductor"
 # Separate prefill vs decode compile modes (only effective when USE_SPLIT_COMPILE=True)
