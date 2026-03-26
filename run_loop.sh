@@ -2,18 +2,24 @@
 # run_loop.sh — Launch the autonomous inference optimization agent.
 #
 # Usage:
-#   ./run_loop.sh                         # default model (Qwen 2.5 7B)
-#   ./run_loop.sh --model "Qwen/Qwen2.5-0.5B"
+#   ./run_loop.sh                                  # use model already in config.json
+#   ./run_loop.sh --model "org/model-name"         # download + use this model
 #
-# Tip: Run inside tmux so the agent survives SSH disconnects:
-#   tmux new -s autoresearch
-#   ./run_loop.sh
+# Tip: Run inside tmux so the session survives SSH disconnects:
+#   tmux new -s autoresearch && ./run_loop.sh --model "org/model-name"
 
 set -e
 export PATH="$HOME/.local/bin:$PATH"
 cd "$(dirname "$0")"
 
-MODEL_ARG="${1:-}"
+# Parse --model flag
+MODEL_FLAG=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --model) MODEL_FLAG="--model $2"; shift 2 ;;
+        *)        echo "Unknown argument: $1"; exit 1 ;;
+    esac
+done
 
 echo "========================================"
 echo "  autoresearch-inference agent loop"
@@ -21,22 +27,14 @@ echo "========================================"
 echo "Started: $(date)"
 echo ""
 
-# Step 1: Setup (GPU discovery, model download, baseline benchmark)
+# Step 1: Setup — GPU discovery, model download, architecture detection, baseline
 echo "--- Setup & Baseline ---"
-if [ -n "$MODEL_ARG" ]; then
-    uv run prepare.py "$MODEL_ARG"
-else
-    uv run prepare.py
-fi
+uv run prepare.py $MODEL_FLAG
 
-# Step 2: Initial profile
+# Step 2: Profile — separate call so baseline results are committed first
 echo ""
 echo "--- Initial Profile ---"
-if [ -n "$MODEL_ARG" ]; then
-    uv run prepare.py "$MODEL_ARG" --profile
-else
-    uv run prepare.py --profile
-fi
+uv run prepare.py $MODEL_FLAG --profile
 
 # Step 3: Run agent
 echo ""
@@ -63,23 +61,21 @@ fi
 # Append to LEARNINGS.md session log
 SESSION_ROW="| ${SESSION_DATE} | ${SESSION_TAG} | ${EXPERIMENT_COUNT} | ${BEST_TOKS} | (see results.tsv) |"
 python3 - <<PYEOF
-import re, os
+import os
 path = "LEARNINGS.md"
+if not os.path.exists(path):
+    exit(0)
 with open(path) as f:
     content = f.read()
-
-# Replace the placeholder row or append
 placeholder = "| —    | —       | —           | —          | —           |"
 new_row = "${SESSION_ROW}"
 if placeholder in content:
     content = content.replace(placeholder, new_row, 1)
 else:
-    # Append after the last table row
     content = content.rstrip() + "\n" + new_row + "\n"
-
 with open(path, "w") as f:
     f.write(content)
-print(f"Updated LEARNINGS.md session log")
+print("Updated LEARNINGS.md session log")
 PYEOF
 
 # Step 5: Generate plots
@@ -105,17 +101,17 @@ fi
 echo ""
 echo "--- Final Commit ---"
 git add LEARNINGS.md results.tsv 2>/dev/null || true
-if [ -d plots ]; then
-    git add plots/ 2>/dev/null || true
-fi
+[ -d plots ] && git add plots/ 2>/dev/null || true
 git diff --cached --quiet || git commit -m "session end: ${SESSION_TAG} — best ${BEST_TOKS} tok/s"
 
 echo ""
 echo "========================================"
 echo "  Session complete: $(date)"
-echo "  Branch: ${SESSION_TAG}"
+echo "  Branch:      ${SESSION_TAG}"
 echo "  Experiments: ${EXPERIMENT_COUNT}"
-echo "  Best tok/s: ${BEST_TOKS}"
+echo "  Best tok/s:  ${BEST_TOKS}"
+echo ""
+echo "  Publish results:  uv run analyze.py --publish"
 echo "========================================"
 
 exit $AGENT_EXIT

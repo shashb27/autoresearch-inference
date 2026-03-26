@@ -200,14 +200,100 @@ def write_hardware_json(device: str) -> dict:
     return info
 
 
+def detect_model_metadata(model_path: str) -> dict:
+    """Detect model architecture and size from model config files (no weights loaded).
+
+    Returns a dict with:
+      model_params_b    — estimated parameter count in billions
+      model_type        — architecture family (e.g. "qwen2", "llama", "mistral")
+      num_hidden_layers — transformer depth
+      num_attention_heads — total attention heads
+      num_key_value_heads — KV heads (< num_attention_heads means GQA)
+      hidden_size       — model width
+      intermediate_size — FFN intermediate width
+      sliding_window    — sliding window size if used, else null
+      mtp_supported     — true if model has multi-token prediction heads
+    """
+    try:
+        from transformers import AutoConfig
+        cfg = AutoConfig.from_pretrained(model_path)
+
+        hidden       = getattr(cfg, "hidden_size", 0)
+        layers       = getattr(cfg, "num_hidden_layers", 0)
+        vocab        = getattr(cfg, "vocab_size", 0)
+        heads        = getattr(cfg, "num_attention_heads", 0)
+        kv_heads     = getattr(cfg, "num_key_value_heads", heads)
+        intermediate = getattr(cfg, "intermediate_size", 4 * hidden)
+
+        # Heuristic param estimate (SwiGLU FFN: gate+up+down = 3 matrices)
+        embedding_params = vocab * hidden
+        attn_params = layers * (
+            hidden * hidden                        # Q projection
+            + (hidden // max(heads, 1)) * kv_heads * hidden * 2  # K+V projections
+            + hidden * hidden                      # O projection
+        )
+        ffn_params = layers * (3 * hidden * intermediate)
+        model_params_b = round((embedding_params + attn_params + ffn_params) / 1e9, 2)
+
+        return {
+            "model_params_b":       model_params_b,
+            "model_type":           getattr(cfg, "model_type", "unknown"),
+            "num_hidden_layers":    layers,
+            "num_attention_heads":  heads,
+            "num_key_value_heads":  kv_heads,
+            "hidden_size":          hidden,
+            "intermediate_size":    intermediate,
+            "sliding_window":       getattr(cfg, "sliding_window", None),
+            "mtp_supported":        getattr(cfg, "num_nextn_predict_layers", 0) > 0,
+        }
+    except Exception as e:
+        print(f"  WARNING: Could not detect model metadata: {e}")
+        return {
+            "model_params_b": None, "model_type": "unknown",
+            "num_hidden_layers": None, "num_attention_heads": None,
+            "num_key_value_heads": None, "hidden_size": None,
+            "intermediate_size": None, "sliding_window": None,
+            "mtp_supported": False,
+        }
+
+
 def write_config_json(model_id: str, model_path: str, device: str, vram_limit_gb: float) -> dict:
-    """Write config.json for infer.py to read instead of importing constants."""
+    """Write config.json for infer.py to read instead of importing constants.
+
+    Also detects and embeds model architecture metadata so the agent knows
+    actual parameter count, GQA layout, and MTP support without guessing
+    from the model name.
+    """
+    print("Detecting model architecture...")
+    metadata = detect_model_metadata(model_path)
+    params_b = metadata.get("model_params_b")
+    if params_b is not None:
+        print(f"  Model size: ~{params_b}B parameters")
+    print(f"  Architecture: {metadata.get('model_type', 'unknown')}")
+    if metadata.get("num_key_value_heads") and metadata.get("num_attention_heads"):
+        if metadata["num_key_value_heads"] < metadata["num_attention_heads"]:
+            print(f"  GQA: {metadata['num_key_value_heads']} KV heads / {metadata['num_attention_heads']} Q heads")
+    if metadata.get("mtp_supported"):
+        print("  MTP: supported (multi-token prediction heads detected)")
+    if metadata.get("sliding_window"):
+        print(f"  Sliding window: {metadata['sliding_window']} tokens")
+
     config = {
-        "model_id": model_id,
-        "model_path": model_path,
-        "device": device,
+        "model_id":      model_id,
+        "model_path":    model_path,
+        "device":        device,
         "max_new_tokens": MAX_NEW_TOKENS,
         "vram_limit_gb": vram_limit_gb,
+        # Model metadata — agent reads these for evidence-based decisions
+        "model_params_b":      metadata["model_params_b"],
+        "model_type":          metadata["model_type"],
+        "num_hidden_layers":   metadata["num_hidden_layers"],
+        "num_attention_heads": metadata["num_attention_heads"],
+        "num_key_value_heads": metadata["num_key_value_heads"],
+        "hidden_size":         metadata["hidden_size"],
+        "intermediate_size":   metadata["intermediate_size"],
+        "sliding_window":      metadata["sliding_window"],
+        "mtp_supported":       metadata["mtp_supported"],
     }
     path = os.path.join(PROJECT_DIR, "config.json")
     with open(path, "w") as f:
