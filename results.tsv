@@ -5,3 +5,4 @@ commit	tok_s	ttft_ms	peak_vram_gb	status	description
 36bc071	37.09	31.18	8.7	discard	INT8 weight-only: -57% throughput (torchao cpp ext incompatible)
 f470e5b	0.00	0.0	0.0	crash	FP8 KV cache: cache_dtype not supported by from_pretrained
 9ca8c8d	85.23	18.59	14.3	discard	Preallocate output buffer: no gain, within noise
+83350b0	85.45	18.65	14.3	keep	FP16 dtype: +0.1% throughput, -11% TTFT (marginal, within noise)
