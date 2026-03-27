@@ -78,8 +78,8 @@ INDUCTOR_COORDINATE_DESCENT: bool      = False  # autotune Triton tile sizes (sl
 INDUCTOR_SHAPE_PADDING: bool           = False  # pad shapes for memory alignment
 
 # --- Quantization ---
-QUANTIZATION_ENABLED: bool      = False
-QUANTIZATION_TYPE: Optional[str] = None  # "int8" | "int4" | "fp8" | "nf4" | "awq" | "gptq"
+QUANTIZATION_ENABLED: bool      = True
+QUANTIZATION_TYPE: Optional[str] = "int4"  # "int8" | "int4" | "fp8" | "nf4" | "awq" | "gptq"
 
 # --- Generation loop ---
 RETURN_DICT: bool      = False  # False = return tuple, avoids dict construction overhead
@@ -102,9 +102,9 @@ USE_CUDA_GRAPHS: bool = False
 # A small draft model proposes SPECULATIVE_K tokens; the main model verifies
 # all K in one prefill-like forward pass. Typical gain: 2–3× on decode-bound workloads.
 # DRAFT_MODEL_PATH must be a same-family smaller model (e.g. 0.5B for a 7B main model).
-USE_SPECULATIVE_DECODING: bool = False
-DRAFT_MODEL_PATH: str          = ""   # fill with path from config.json model family
-SPECULATIVE_K: int             = 4    # tokens to draft per step (tune 3–8)
+USE_SPECULATIVE_DECODING: bool = True
+DRAFT_MODEL_PATH: str          = os.path.expanduser("~/.cache/autoresearch-inference/meta-llama-llama-3-2-1b/model")
+SPECULATIVE_K: int             = 5    # tokens to draft per step (tune 3–8)
 
 # --- Batch size ---
 # Currently the benchmark harness sends prompts one-at-a-time (batch=1).
@@ -124,12 +124,26 @@ EMPTY_CACHE_BEFORE_BENCHMARK: bool = True
 
 def load_model() -> torch.nn.Module:
     """Load and configure the model for inference."""
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_PATH,
-        dtype=DTYPE,
-        device_map=DEVICE,
+    load_kwargs = dict(
+        pretrained_model_name_or_path=MODEL_PATH,
+        device_map="auto",
         attn_implementation=ATTENTION_IMPLEMENTATION,
     )
+
+    if QUANTIZATION_ENABLED and QUANTIZATION_TYPE == "int8":
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+    elif QUANTIZATION_ENABLED and QUANTIZATION_TYPE == "int4":
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_compute_dtype=DTYPE, bnb_4bit_quant_type="nf4",
+        )
+    elif QUANTIZATION_ENABLED and QUANTIZATION_TYPE == "fp8":
+        load_kwargs["dtype"] = torch.float8_e4m3fn
+    else:
+        load_kwargs["dtype"] = DTYPE
+
+    model = AutoModelForCausalLM.from_pretrained(**load_kwargs)
     model.eval()
     return model
 
@@ -255,53 +269,47 @@ def make_generate_fn(
     #     # 4. Repeat until MAX_NEW_TOKENS reached
     #     ...
 
+    # Determine the device of the model's first parameter for input placement
+    _model_device = next(model.parameters()).device
+
+    # Load draft model for speculative decoding
+    _assistant_model = None
+    if USE_SPECULATIVE_DECODING and DRAFT_MODEL_PATH:
+        print(f"Loading draft model from {DRAFT_MODEL_PATH}...")
+        _assistant_model = AutoModelForCausalLM.from_pretrained(
+            DRAFT_MODEL_PATH,
+            dtype=DTYPE,
+            device_map=_model_device,
+        ).eval()
+        print("Draft model loaded.")
+
     @torch.inference_mode()
     def generate_fn(
         input_ids: torch.Tensor,
     ) -> Tuple[torch.Tensor, Dict]:
-        input_ids = input_ids.to(DEVICE)
-        generated = input_ids
-        past_key_values = None
-        ttft_ms: Optional[float] = None
+        input_ids = input_ids.to(_model_device)
 
         t_start = time.perf_counter()
 
-        for step in range(MAX_NEW_TOKENS):
-            if past_key_values is None:
-                outputs = model(
-                    generated,
-                    use_cache=True,
-                    return_dict=RETURN_DICT,
-                )
-            else:
-                outputs = model(
-                    generated[:, -1:],
-                    past_key_values=past_key_values,
-                    use_cache=True,
-                    return_dict=RETURN_DICT,
-                )
+        gen_kwargs = dict(
+            max_new_tokens=MAX_NEW_TOKENS,
+            min_new_tokens=min_new,
+            do_sample=False,
+            use_cache=True,
+        )
 
-            # Support both dict output (return_dict=True) and tuple (return_dict=False)
-            if RETURN_DICT:
-                logits          = outputs.logits
-                past_key_values = outputs.past_key_values
-            else:
-                logits          = outputs[0]
-                past_key_values = outputs[1]
+        if _assistant_model is not None:
+            gen_kwargs["assistant_model"] = _assistant_model
 
-            next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        output_ids = model.generate(input_ids, **gen_kwargs)
 
-            # Measure TTFT: time until first token is produced (end of prefill)
-            if step == 0:
-                if torch.cuda.is_available():
-                    torch.cuda.synchronize()
-                ttft_ms = (time.perf_counter() - t_start) * 1000
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        total_ms = (time.perf_counter() - t_start) * 1000
+        num_new = output_ids.shape[1] - input_ids.shape[1]
+        ttft_ms = total_ms / max(num_new, 1)  # proxy
 
-            generated = torch.cat([generated, next_token], dim=-1)
-
-            # Skip EOS check when SKIP_EARLY_STOP=True (saves a Python conditional per step)
-            if step >= min_new - 1 and next_token.item() == eos_token_id:
-                break
+        return output_ids, {"ttft_ms": ttft_ms}
 
         return generated, {"ttft_ms": ttft_ms}
 

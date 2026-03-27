@@ -1,0 +1,158 @@
+{
+  "run_id": "nvidia-rtx-pro-6000-blackwell-workstation-edition-meta-llama-llama-3-1-70b-20260327-eba296",
+  "submitted_at": "2026-03-27T16:39:41.403584Z",
+  "contributor": "shashb27",
+  "branch": "autoresearch/llama70b-blackwell",
+  "hardware": {
+    "gpu_name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "gpu_family": "sm_12.0",
+    "compute_capability": "12.0",
+    "vram_total_gb": 95.0,
+    "cuda_version": "13.0",
+    "bf16_supported": true,
+    "fp8_supported": true
+  },
+  "model": {
+    "id": "meta-llama/Llama-3.1-70B",
+    "params_b": 70.0,
+    "family": "Llama 3.1"
+  },
+  "results": {
+    "baseline_tok_s": 10.5,
+    "best_tok_s": 22.66,
+    "gain_pct": 115.8,
+    "best_ttft_ms": 207.45,
+    "best_vram_gb": 16.4,
+    "total_experiments": 17,
+    "keep_count": 4,
+    "discard_count": 11,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "INT4 NF4 (bitsandbytes) \u2014 2.16x throughput, 14/20 valid",
+    "techniques": [
+      "int4_quantization"
+    ]
+  },
+  "experiments": [
+    {
+      "n": 0,
+      "tok_s": 10.5,
+      "ttft_ms": 101.42,
+      "status": "keep",
+      "description": "baseline: BF16 + SDPA + device_map=auto (2x GPUs)"
+    },
+    {
+      "n": 1,
+      "tok_s": 7.03,
+      "ttft_ms": 184.24,
+      "status": "discard",
+      "description": "torch.compile(dynamic=True) \u2014 slower on multi-GPU"
+    },
+    {
+      "n": 2,
+      "tok_s": 7.18,
+      "ttft_ms": 187.62,
+      "status": "discard",
+      "description": "INT8 bitsandbytes \u2014 dequant overhead, slower than BF16 2-GPU"
+    },
+    {
+      "n": 3,
+      "tok_s": 22.66,
+      "ttft_ms": 207.45,
+      "status": "keep",
+      "description": "INT4 NF4 (bitsandbytes) \u2014 2.16x throughput, 14/20 valid"
+    },
+    {
+      "n": 4,
+      "tok_s": 5.29,
+      "ttft_ms": 244.9,
+      "status": "discard",
+      "description": "INT4 + torch.compile \u2014 compile incompatible with bnb quantized"
+    },
+    {
+      "n": 5,
+      "tok_s": 15.49,
+      "ttft_ms": 398.11,
+      "status": "discard",
+      "description": "INT4 NF4 + double quant + FP16 \u2014 double quant overhead"
+    },
+    {
+      "n": 6,
+      "tok_s": 21.06,
+      "ttft_ms": 46.77,
+      "status": "keep",
+      "description": "INT4 NF4 + HF generate() \u2014 20/20 valid, composite 21.06"
+    },
+    {
+      "n": 7,
+      "tok_s": 0.0,
+      "ttft_ms": 0.0,
+      "status": "crash",
+      "description": "flash_attention_2 not installed"
+    },
+    {
+      "n": 8,
+      "tok_s": 20.96,
+      "ttft_ms": 207.96,
+      "status": "discard",
+      "description": "INT4 NF4 + custom decode + rep penalty \u2014 slightly slower"
+    },
+    {
+      "n": 9,
+      "tok_s": 22.66,
+      "ttft_ms": 41.19,
+      "status": "keep",
+      "description": "speculative decoding (1B draft) \u2014 22.66 tok/s, 20/20 valid"
+    },
+    {
+      "n": 10,
+      "tok_s": 22.57,
+      "ttft_ms": 41.14,
+      "status": "discard",
+      "description": "spec decoding K=8 \u2014 marginal decrease from K=5"
+    },
+    {
+      "n": 11,
+      "tok_s": 21.33,
+      "ttft_ms": 44.91,
+      "status": "discard",
+      "description": "3B draft model \u2014 slower than 1B draft"
+    },
+    {
+      "n": 12,
+      "tok_s": 19.37,
+      "ttft_ms": 51.15,
+      "status": "discard",
+      "description": "INT4 draft model \u2014 dequant overhead worse than BF16 draft"
+    },
+    {
+      "n": 13,
+      "tok_s": 13.11,
+      "ttft_ms": 76.67,
+      "status": "discard",
+      "description": "FP16 compute dtype \u2014 slower than BF16 on Blackwell"
+    },
+    {
+      "n": 14,
+      "tok_s": 13.19,
+      "ttft_ms": 88.62,
+      "status": "discard",
+      "description": "prompt lookup decoding \u2014 output doesn't match input patterns"
+    },
+    {
+      "n": 15,
+      "tok_s": 0.0,
+      "ttft_ms": 0.0,
+      "status": "crash",
+      "description": "GPTQ \u2014 auto-gptq QuantizeConfig broken with current versions"
+    },
+    {
+      "n": 16,
+      "tok_s": 21.08,
+      "ttft_ms": 48.46,
+      "status": "discard",
+      "description": "8B draft (same family) \u2014 overhead exceeds acceptance benefit vs 1B"
+    }
+  ]
+}
