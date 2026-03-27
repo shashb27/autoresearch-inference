@@ -823,6 +823,68 @@ def build_stats_cards(stats: dict) -> str:
     )
 
 
+def generate_chart_png(runs: list[dict], out_path: str) -> None:
+    """Generate a bar chart PNG showing baseline vs best tok/s for each run."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except ImportError:
+        print("  WARNING: matplotlib not installed, skipping PNG chart generation")
+        return
+
+    sorted_runs = sorted(runs, key=lambda r: r["results"]["best_tok_s"], reverse=True)
+
+    labels = []
+    baselines = []
+    bests = []
+    gains = []
+    for r in sorted_runs:
+        gpu = r["hardware"]["gpu_name"].replace("NVIDIA ", "").replace("GeForce ", "")
+        model = r["model"]["id"].split("/")[-1]
+        labels.append(f"{gpu}\n{model}")
+        baselines.append(r["results"]["baseline_tok_s"])
+        bests.append(r["results"]["best_tok_s"])
+        gains.append(r["results"]["gain_pct"])
+
+    fig, ax = plt.subplots(figsize=(max(10, len(labels) * 1.2), 5))
+    fig.patch.set_facecolor("#0f1117")
+    ax.set_facecolor("#0f1117")
+
+    x = np.arange(len(labels))
+    width = 0.35
+
+    bars_base = ax.bar(x - width / 2, baselines, width, label="Baseline tok/s",
+                       color="#3b3f6b", edgecolor="#6366f1", linewidth=0.8)
+    bars_best = ax.bar(x + width / 2, bests, width, label="Best tok/s",
+                       color="#10b981", edgecolor="#059669", linewidth=0.8)
+
+    # Add gain labels on top of best bars
+    for i, (bar, gain) in enumerate(zip(bars_best, gains)):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 3,
+                f"+{gain:.0f}%", ha="center", va="bottom",
+                fontsize=8, fontweight="bold", color="#10b981")
+
+    ax.set_ylabel("tok/s", color="#8892a4", fontsize=11)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=8, color="#8892a4", ha="center")
+    ax.tick_params(axis="y", colors="#8892a4")
+    ax.legend(loc="upper right", fontsize=9, facecolor="#1a1d2e",
+              edgecolor="#2e3150", labelcolor="#e2e8f0")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_color("#2e3150")
+    ax.spines["left"].set_color("#2e3150")
+    ax.grid(axis="y", color="#2e3150", linewidth=0.5, alpha=0.5)
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    fig.savefig(out_path, dpi=150, facecolor="#0f1117", bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Chart written  : {os.path.relpath(out_path, PROJECT_DIR)}")
+
+
 def render_html(runs: list[dict]) -> str:
     stats = stats_summary(runs)
     chart_data = build_chart_data(runs)
@@ -886,6 +948,10 @@ Examples:
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(html)
+
+    # Generate PNG chart for README
+    chart_path = os.path.join(os.path.dirname(args.out), "best_vs_baseline.png")
+    generate_chart_png(runs, chart_path)
 
     size_kb = os.path.getsize(args.out) / 1024
     print(f"  Written to     : {os.path.relpath(args.out, PROJECT_DIR)}  ({size_kb:.1f} KB)")

@@ -4,6 +4,8 @@ Autonomous LLM inference optimization. An AI agent iteratively modifies an infer
 
 Inspired by [autoresearch](https://github.com/karpathy/autoresearch), targeting **inference throughput (tok/s)** instead of training quality.
 
+![Best vs Baseline tok/s](leaderboard/best_vs_baseline.png)
+
 ---
 
 ## How it works
