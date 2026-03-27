@@ -100,7 +100,7 @@ class HardwareInfo:
 # Dynamic config (set by main(), or loaded from config.json on import)
 # ---------------------------------------------------------------------------
 
-MODEL_ID = "Qwen/Qwen2.5-7B"
+MODEL_ID = None  # set by --model arg or config.json
 DEVICE = "cuda"
 VRAM_LIMIT_GB = 90.0
 CACHE_DIR = BASE_CACHE_DIR  # backwards compat
@@ -766,8 +766,8 @@ def benchmark(generate_fn: Callable, tokenizer) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Setup and baseline for autoresearch-inference")
-    parser.add_argument("--model", default="Qwen/Qwen2.5-7B",
-                        help="HuggingFace model ID (default: Qwen/Qwen2.5-7B)")
+    parser.add_argument("--model", default=None,
+                        help="HuggingFace model ID (required on first run, then reads from config.json)")
     parser.add_argument("--check", action="store_true",
                         help="Only verify project structure (no GPU needed)")
     parser.add_argument("--profile", action="store_true",
@@ -775,6 +775,17 @@ if __name__ == "__main__":
     parser.add_argument("--validate", action="store_true",
                         help="Validate infer.py interface without running benchmark")
     args = parser.parse_args()
+
+    # Resolve model: explicit --model > existing config.json > error
+    if args.model is None:
+        config_path = os.path.join(PROJECT_DIR, "config.json")
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                cfg = json.load(f)
+            args.model = cfg.get("model_id")
+        if args.model is None:
+            print("ERROR: No model specified. Use --model <HuggingFace model ID> on first run.")
+            sys.exit(1)
 
     print("=" * 60)
     print("autoresearch-inference: Setup & Baseline")
