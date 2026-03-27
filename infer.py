@@ -29,6 +29,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # Allow more cache entries for varying input shapes
 torch._dynamo.config.cache_size_limit = 64
 
+# Enable TF32 for float32 matmuls (uses tensor cores)
+torch.set_float32_matmul_precision('high')
+
 from prepare import benchmark
 
 # ============================================================
