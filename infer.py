@@ -127,7 +127,7 @@ def load_model() -> torch.nn.Module:
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
         dtype=DTYPE,
-        device_map=DEVICE,
+        device_map="auto",
         attn_implementation=ATTENTION_IMPLEMENTATION,
     )
     model.eval()
