@@ -102,9 +102,9 @@ USE_CUDA_GRAPHS: bool = False
 # A small draft model proposes SPECULATIVE_K tokens; the main model verifies
 # all K in one prefill-like forward pass. Typical gain: 2–3× on decode-bound workloads.
 # DRAFT_MODEL_PATH must be a same-family smaller model (e.g. 0.5B for a 7B main model).
-USE_SPECULATIVE_DECODING: bool = False
-DRAFT_MODEL_PATH: str          = ""   # fill with path from config.json model family
-SPECULATIVE_K: int             = 4    # tokens to draft per step (tune 3–8)
+USE_SPECULATIVE_DECODING: bool = True
+DRAFT_MODEL_PATH: str          = os.path.expanduser("~/.cache/autoresearch-inference/meta-llama-llama-3-2-1b/model")
+SPECULATIVE_K: int             = 5    # tokens to draft per step (tune 3–8)
 
 # --- Batch size ---
 # Currently the benchmark harness sends prompts one-at-a-time (batch=1).
@@ -272,6 +272,17 @@ def make_generate_fn(
     # Determine the device of the model's first parameter for input placement
     _model_device = next(model.parameters()).device
 
+    # Load draft model for speculative decoding
+    _assistant_model = None
+    if USE_SPECULATIVE_DECODING and DRAFT_MODEL_PATH:
+        print(f"Loading draft model from {DRAFT_MODEL_PATH}...")
+        _assistant_model = AutoModelForCausalLM.from_pretrained(
+            DRAFT_MODEL_PATH,
+            dtype=DTYPE,
+            device_map=_model_device,
+        ).eval()
+        print("Draft model loaded.")
+
     @torch.inference_mode()
     def generate_fn(
         input_ids: torch.Tensor,
@@ -280,13 +291,17 @@ def make_generate_fn(
 
         t_start = time.perf_counter()
 
-        output_ids = model.generate(
-            input_ids,
+        gen_kwargs = dict(
             max_new_tokens=MAX_NEW_TOKENS,
             min_new_tokens=min_new,
             do_sample=False,
             use_cache=True,
         )
+
+        if _assistant_model is not None:
+            gen_kwargs["assistant_model"] = _assistant_model
+
+        output_ids = model.generate(input_ids, **gen_kwargs)
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()
