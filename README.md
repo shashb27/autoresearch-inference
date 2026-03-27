@@ -1,6 +1,6 @@
 # autoresearch-inference
 
-Autonomous LLM inference optimization. An AI agent iteratively modifies an inference script, benchmarks it, keeps improvements, and reverts failures — running 100+ experiments overnight to find the fastest possible configuration for your GPU.
+Autonomous LLM inference optimization. An AI agent iteratively modifies an inference script, benchmarks it, keeps improvements, and reverts failures — finding the fastest possible configuration for your GPU.
 
 Inspired by [autoresearch](https://github.com/karpathy/autoresearch), targeting **inference throughput (tok/s)** instead of training quality.
 
