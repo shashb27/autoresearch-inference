@@ -78,8 +78,8 @@ INDUCTOR_COORDINATE_DESCENT: bool      = False  # autotune Triton tile sizes (sl
 INDUCTOR_SHAPE_PADDING: bool           = False  # pad shapes for memory alignment
 
 # --- Quantization ---
-QUANTIZATION_ENABLED: bool      = False
-QUANTIZATION_TYPE: Optional[str] = None  # "int8" | "int4" | "fp8" | "nf4" | "awq" | "gptq"
+QUANTIZATION_ENABLED: bool      = True
+QUANTIZATION_TYPE: Optional[str] = "int4"  # "int8" | "int4" | "fp8" | "nf4" | "awq" | "gptq"
 
 # --- Generation loop ---
 RETURN_DICT: bool      = False  # False = return tuple, avoids dict construction overhead
@@ -124,12 +124,26 @@ EMPTY_CACHE_BEFORE_BENCHMARK: bool = True
 
 def load_model() -> torch.nn.Module:
     """Load and configure the model for inference."""
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_PATH,
-        dtype=DTYPE,
+    load_kwargs = dict(
+        pretrained_model_name_or_path=MODEL_PATH,
         device_map="auto",
         attn_implementation=ATTENTION_IMPLEMENTATION,
     )
+
+    if QUANTIZATION_ENABLED and QUANTIZATION_TYPE == "int8":
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+    elif QUANTIZATION_ENABLED and QUANTIZATION_TYPE == "int4":
+        from transformers import BitsAndBytesConfig
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_compute_dtype=DTYPE, bnb_4bit_quant_type="nf4",
+        )
+    elif QUANTIZATION_ENABLED and QUANTIZATION_TYPE == "fp8":
+        load_kwargs["dtype"] = torch.float8_e4m3fn
+    else:
+        load_kwargs["dtype"] = DTYPE
+
+    model = AutoModelForCausalLM.from_pretrained(**load_kwargs)
     model.eval()
     return model
 
