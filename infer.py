@@ -74,7 +74,7 @@ COMPILE_DECODE_MODE: str  = "reduce-overhead"   # bandwidth-bound: launch overhe
 # The rest are off by default; turn on one at a time to measure their effect.
 INDUCTOR_FX_GRAPH_CACHE: bool          = True   # free win: no runtime cost
 INDUCTOR_EPILOGUE_FUSION: bool         = True   # fuse pointwise ops into matmul epilogues
-INDUCTOR_COORDINATE_DESCENT: bool      = False  # autotune Triton tile sizes (slow first run)
+INDUCTOR_COORDINATE_DESCENT: bool      = True   # autotune Triton tile sizes (slow first run)
 INDUCTOR_SHAPE_PADDING: bool           = False  # pad shapes for memory alignment
 
 # --- Quantization ---

@@ -1,1 +1,3 @@
 commit	tok_s	ttft_ms	peak_vram_gb	status	description
+acc91d5	262.98	7.31	3.0	keep	baseline: BF16 + SDPA + compile(dynamic=True)
+1430dca	0.00	0.0	2.9	crash	reduce-overhead: CUDA graph tensor overwrite with dynamic KV cache
