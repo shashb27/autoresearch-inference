@@ -269,53 +269,32 @@ def make_generate_fn(
     #     # 4. Repeat until MAX_NEW_TOKENS reached
     #     ...
 
+    # Determine the device of the model's first parameter for input placement
+    _model_device = next(model.parameters()).device
+
     @torch.inference_mode()
     def generate_fn(
         input_ids: torch.Tensor,
     ) -> Tuple[torch.Tensor, Dict]:
-        input_ids = input_ids.to(DEVICE)
-        generated = input_ids
-        past_key_values = None
-        ttft_ms: Optional[float] = None
+        input_ids = input_ids.to(_model_device)
 
         t_start = time.perf_counter()
 
-        for step in range(MAX_NEW_TOKENS):
-            if past_key_values is None:
-                outputs = model(
-                    generated,
-                    use_cache=True,
-                    return_dict=RETURN_DICT,
-                )
-            else:
-                outputs = model(
-                    generated[:, -1:],
-                    past_key_values=past_key_values,
-                    use_cache=True,
-                    return_dict=RETURN_DICT,
-                )
+        output_ids = model.generate(
+            input_ids,
+            max_new_tokens=MAX_NEW_TOKENS,
+            min_new_tokens=min_new,
+            do_sample=False,
+            use_cache=True,
+        )
 
-            # Support both dict output (return_dict=True) and tuple (return_dict=False)
-            if RETURN_DICT:
-                logits          = outputs.logits
-                past_key_values = outputs.past_key_values
-            else:
-                logits          = outputs[0]
-                past_key_values = outputs[1]
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        total_ms = (time.perf_counter() - t_start) * 1000
+        num_new = output_ids.shape[1] - input_ids.shape[1]
+        ttft_ms = total_ms / max(num_new, 1)  # proxy
 
-            next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
-
-            # Measure TTFT: time until first token is produced (end of prefill)
-            if step == 0:
-                if torch.cuda.is_available():
-                    torch.cuda.synchronize()
-                ttft_ms = (time.perf_counter() - t_start) * 1000
-
-            generated = torch.cat([generated, next_token], dim=-1)
-
-            # Skip EOS check when SKIP_EARLY_STOP=True (saves a Python conditional per step)
-            if step >= min_new - 1 and next_token.item() == eos_token_id:
-                break
+        return output_ids, {"ttft_ms": ttft_ms}
 
         return generated, {"ttft_ms": ttft_ms}
 
