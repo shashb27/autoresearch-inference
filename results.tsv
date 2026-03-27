@@ -1,1 +1,17 @@
 commit	tok_s	ttft_ms	peak_vram_gb	status	description
+e34f85f	10.50	101.42	65.8	keep	baseline: BF16 + SDPA + device_map=auto (2x GPUs)
+6f1dd80	7.03	184.24	66.0	discard	torch.compile(dynamic=True) — slower on multi-GPU
+a42343b	7.18	187.62	29.2	discard	INT8 bitsandbytes — dequant overhead, slower than BF16 2-GPU
+84287bf	22.66	207.45	16.4	keep	INT4 NF4 (bitsandbytes) — 2.16x throughput, 14/20 valid
+b9d47eb	5.29	244.90	16.4	discard	INT4 + torch.compile — compile incompatible with bnb quantized
+edfe93f	15.49	398.11	15.7	discard	INT4 NF4 + double quant + FP16 — double quant overhead
+3abe754	21.06	46.77	16.4	keep	INT4 NF4 + HF generate() — 20/20 valid, composite 21.06
+4863a92	0.00	0.0	0.0	crash	flash_attention_2 not installed
+97bc8d2	20.96	207.96	16.4	discard	INT4 NF4 + custom decode + rep penalty — slightly slower
+687a6cb	22.66	41.19	18.7	keep	speculative decoding (1B draft) — 22.66 tok/s, 20/20 valid
+4152da4	22.57	41.14	18.7	discard	spec decoding K=8 — marginal decrease from K=5
+4a9199d	21.33	44.91	22.4	discard	3B draft model — slower than 1B draft
+c6f79c2	19.37	51.15	17.4	discard	INT4 draft model — dequant overhead worse than BF16 draft
+ca4705a	13.11	76.67	19.1	discard	FP16 compute dtype — slower than BF16 on Blackwell
+8ffd925	13.19	88.62	16.4	discard	prompt lookup decoding — output doesn't match input patterns
+6f7c433	0.00	0.0	0.0	crash	GPTQ — auto-gptq QuantizeConfig broken with current versions
