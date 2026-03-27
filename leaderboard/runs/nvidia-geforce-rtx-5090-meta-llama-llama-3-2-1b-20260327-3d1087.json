@@ -1,0 +1,167 @@
+{
+  "run_id": "nvidia-geforce-rtx-5090-meta-llama-llama-3-2-1b-20260327-3d1087",
+  "submitted_at": "2026-03-27T06:39:17.617362Z",
+  "contributor": "shashb27",
+  "branch": "autoresearch/llama-3.2-1b-rtx5090",
+  "hardware": {
+    "gpu_name": "NVIDIA GeForce RTX 5090",
+    "gpu_family": "sm_12.0",
+    "compute_capability": "12.0",
+    "vram_total_gb": 31.4,
+    "cuda_version": "13.0",
+    "bf16_supported": true,
+    "fp8_supported": true
+  },
+  "model": {
+    "id": "meta-llama/Llama-3.2-1B",
+    "params_b": 1.0,
+    "family": "Llama 3.2"
+  },
+  "results": {
+    "baseline_tok_s": 145.79,
+    "best_tok_s": 303.63,
+    "gain_pct": 108.3,
+    "best_ttft_ms": 8.34,
+    "best_vram_gb": 2.4,
+    "total_experiments": 18,
+    "keep_count": 7,
+    "discard_count": 9,
+    "crash_count": 2
+  },
+  "best_config": {
+    "description": "BF16 + SDPA + custom decode \u2014 run 2 (measurement variance)",
+    "techniques": [
+      "bf16",
+      "custom_decode_loop",
+      "sdpa"
+    ]
+  },
+  "experiments": [
+    {
+      "n": 0,
+      "tok_s": 145.79,
+      "ttft_ms": 6.87,
+      "status": "keep",
+      "description": "baseline: FP16 + SDPA + torch.compile default"
+    },
+    {
+      "n": 1,
+      "tok_s": 145.58,
+      "ttft_ms": 6.86,
+      "status": "discard",
+      "description": "BF16 dtype"
+    },
+    {
+      "n": 2,
+      "tok_s": 141.59,
+      "ttft_ms": 7.04,
+      "status": "discard",
+      "description": "TF32 matmul + min_new_tokens + use_cache"
+    },
+    {
+      "n": 3,
+      "tok_s": 143.22,
+      "ttft_ms": 7.0,
+      "status": "discard",
+      "description": "TF32 matmul precision only"
+    },
+    {
+      "n": 4,
+      "tok_s": 144.73,
+      "ttft_ms": 6.9,
+      "status": "discard",
+      "description": "custom decode loop + no compile"
+    },
+    {
+      "n": 5,
+      "tok_s": 0.0,
+      "ttft_ms": 0.0,
+      "status": "crash",
+      "description": "custom decode + reduce-overhead (CUDA graph tensor overwrite)"
+    },
+    {
+      "n": 6,
+      "tok_s": 201.75,
+      "ttft_ms": 3.36,
+      "status": "keep",
+      "description": "custom decode + compile default + dynamo cache=64"
+    },
+    {
+      "n": 7,
+      "tok_s": 266.26,
+      "ttft_ms": 3.76,
+      "status": "keep",
+      "description": "custom decode + compile dynamic=True (no recompilation)"
+    },
+    {
+      "n": 8,
+      "tok_s": 275.14,
+      "ttft_ms": 3.63,
+      "status": "keep",
+      "description": "BF16 + custom decode + dynamic compile"
+    },
+    {
+      "n": 9,
+      "tok_s": 0.0,
+      "ttft_ms": 0.0,
+      "status": "crash",
+      "description": "max-autotune (missing setuptools)"
+    },
+    {
+      "n": 10,
+      "tok_s": 268.68,
+      "ttft_ms": 3.72,
+      "status": "discard",
+      "description": "preallocated output buffer (no gain)"
+    },
+    {
+      "n": 11,
+      "tok_s": 263.45,
+      "ttft_ms": 3.8,
+      "status": "discard",
+      "description": "float32 matmul precision high (no gain w/ BF16)"
+    },
+    {
+      "n": 12,
+      "tok_s": 225.62,
+      "ttft_ms": 4.29,
+      "status": "discard",
+      "description": "INT8 weight-only (torchao) + custom decode"
+    },
+    {
+      "n": 13,
+      "tok_s": 290.88,
+      "ttft_ms": 7.0,
+      "status": "keep",
+      "description": "BF16 + SDPA + custom decode (no compile, PyTorch 2.11) \u2014 run 1"
+    },
+    {
+      "n": 14,
+      "tok_s": 288.78,
+      "ttft_ms": 11.63,
+      "status": "discard",
+      "description": "+ TF32 matmul precision (worse)"
+    },
+    {
+      "n": 15,
+      "tok_s": 228.12,
+      "ttft_ms": 8.87,
+      "status": "discard",
+      "description": "+ eager attention (much worse than SDPA)"
+    },
+    {
+      "n": 16,
+      "tok_s": 303.63,
+      "ttft_ms": 8.34,
+      "status": "keep",
+      "description": "BF16 + SDPA + custom decode \u2014 run 2 (measurement variance)"
+    },
+    {
+      "n": 17,
+      "tok_s": 292.67,
+      "ttft_ms": 7.4,
+      "status": "keep",
+      "description": "BF16 + SDPA + custom decode \u2014 run 3 (avg ~298 tok/s)"
+    }
+  ]
+}

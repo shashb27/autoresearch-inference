@@ -61,7 +61,7 @@ DTYPE = torch.bfloat16
 ATTENTION_IMPLEMENTATION: str = "sdpa"   # "sdpa" | "flash_attention_2" | "eager"
 
 # --- Compilation ---
-USE_TORCH_COMPILE: bool  = True
+USE_TORCH_COMPILE: bool  = False
 COMPILE_MODE: str        = "default"     # "default" | "reduce-overhead" | "max-autotune"
 COMPILE_BACKEND: str     = "inductor"
 # Separate prefill vs decode compile modes (only effective when USE_SPLIT_COMPILE=True)
