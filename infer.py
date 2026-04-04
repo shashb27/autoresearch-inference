@@ -69,7 +69,7 @@ MAX_NEW_TOKENS: int = _CFG.get("max_new_tokens", 256)
 # The agent changes these — one or a few per experiment.
 
 # --- Dtype & attention ---
-DTYPE = torch.float16
+DTYPE = torch.bfloat16
 ATTENTION_IMPLEMENTATION: str = "eager"   # "sdpa" | "flash_attention_2" | "eager"
 
 # --- Compilation ---
@@ -279,6 +279,8 @@ def make_generate_fn(
         past_key_values = None
         ttft_ms: Optional[float] = None
 
+        # Disable GC during the tight decode loop to avoid stalls
+        gc.disable()
         t_start = time.perf_counter()
 
         for step in range(MAX_NEW_TOKENS):
@@ -317,6 +319,9 @@ def make_generate_fn(
             # Skip EOS check when SKIP_EARLY_STOP=True (saves a Python conditional per step)
             if step >= min_new - 1 and next_token.item() == eos_token_id:
                 break
+
+        # Re-enable GC after decode loop
+        gc.enable()
 
         return generated, {"ttft_ms": ttft_ms}
 
