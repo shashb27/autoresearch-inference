@@ -73,7 +73,7 @@ DTYPE = torch.bfloat16
 ATTENTION_IMPLEMENTATION: str = "eager"   # "sdpa" | "flash_attention_2" | "eager"
 
 # --- Compilation ---
-USE_TORCH_COMPILE: bool  = False
+USE_TORCH_COMPILE: bool  = True
 COMPILE_MODE: str        = "default"     # "default" | "reduce-overhead" | "max-autotune"
 COMPILE_BACKEND: str     = "inductor"
 # Separate prefill vs decode compile modes (only effective when USE_SPLIT_COMPILE=True)
@@ -273,6 +273,9 @@ def make_generate_fn(
     # Maximum possible sequence length (longest prompt + MAX_NEW_TOKENS)
     MAX_SEQ_LEN = 512  # prompts are at most ~200 tokens + 256 new tokens
 
+    # Use high-priority CUDA stream for inference
+    inference_stream = torch.cuda.Stream(device=DEVICE, priority=-1)  # -1 = high priority
+
     # Pre-allocate static cache for CUDA graph compatibility
     static_cache = StaticCache(
         config=model.config,
@@ -285,6 +288,9 @@ def make_generate_fn(
     # Static input/output buffers for CUDA graph decode step
     static_input_ids = torch.zeros(1, 1, dtype=torch.long, device=DEVICE)
     static_cache_position = torch.zeros(1, dtype=torch.long, device=DEVICE)
+
+    # Pre-allocated output buffer (avoids clone/append/cat per step)
+    output_buffer = torch.empty(1, MAX_SEQ_LEN, dtype=torch.long, device=DEVICE)
 
     # CUDA graph for decode step
     cuda_graph = None
@@ -323,6 +329,9 @@ def make_generate_fn(
         # Reset the static cache for this generation
         static_cache.reset()
 
+        # Copy input to pre-allocated output buffer
+        output_buffer[:, :seq_len] = input_ids
+
         t_start = time.perf_counter()
 
         # === PREFILL (variable length, no CUDA graph) ===
@@ -340,8 +349,8 @@ def make_generate_fn(
             torch.cuda.synchronize()
         ttft_ms = (time.perf_counter() - t_start) * 1000
 
-        # Build output token list
-        generated_tokens = [next_token]
+        # Write first generated token to output buffer
+        output_buffer[:, seq_len:seq_len + 1] = next_token
 
         # Set up decode: seed static buffers
         static_input_ids.copy_(next_token)
@@ -349,10 +358,9 @@ def make_generate_fn(
 
         # === DECODE (fixed shape, CUDA graph) ===
         if cuda_graph is None:
-            # First call: warmup + capture
+            # First call: warmup + capture on high-priority stream
             try:
-                # Warmup run (required before capture)
-                s = torch.cuda.Stream()
+                s = torch.cuda.Stream(device=DEVICE, priority=-1)
                 s.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(s):
                     _ = _decode_one_token(
@@ -360,13 +368,13 @@ def make_generate_fn(
                     )
                 torch.cuda.current_stream().wait_stream(s)
 
-                # Reset position for capture (warmup advanced it)
+                # Reset for capture (warmup advanced buffers)
                 static_input_ids.copy_(next_token)
                 static_cache_position.fill_(seq_len)
 
-                # Capture
+                # Capture on high-priority stream
                 cuda_graph = torch.cuda.CUDAGraph()
-                with torch.cuda.graph(cuda_graph):
+                with torch.cuda.graph(cuda_graph, stream=inference_stream):
                     static_next_token = _decode_one_token(
                         static_input_ids, static_cache_position, static_cache
                     )
@@ -374,16 +382,14 @@ def make_generate_fn(
                 cuda_graph = None
 
         if cuda_graph is not None:
-            # Reset for actual generation (capture advanced buffers)
+            # Reset for actual generation
             static_input_ids.copy_(next_token)
             static_cache_position.fill_(seq_len)
 
             for step in range(1, MAX_NEW_TOKENS):
                 cuda_graph.replay()
-                # static_next_token is updated in-place by the graph
-                # static_input_ids already has the next token (self-feeding)
-                # static_cache_position already incremented
-                generated_tokens.append(static_next_token.clone())
+                # Write token directly to output buffer (no clone needed)
+                output_buffer[:, seq_len + step:seq_len + step + 1] = static_next_token
         else:
             # Fallback: no CUDA graph
             cur_pos = seq_len
@@ -394,12 +400,11 @@ def make_generate_fn(
                 next_token = _decode_one_token(
                     static_input_ids, static_cache_position, past_key_values
                 )
-                generated_tokens.append(next_token)
+                output_buffer[:, cur_pos + 1:cur_pos + 2] = next_token
                 cur_pos += 1
 
-        # Reconstruct full output
-        all_tokens = torch.cat([input_ids] + generated_tokens, dim=-1)
-        return all_tokens, {"ttft_ms": ttft_ms}
+        total_len = seq_len + MAX_NEW_TOKENS
+        return output_buffer[:, :total_len].clone(), {"ttft_ms": ttft_ms}
 
     return generate_fn
 
