@@ -173,6 +173,12 @@ def _apply_inductor_configs() -> None:
     # Aggressive kernel fusion to reduce launch overhead
     ind.aggressive_fusion         = True
     ind.combo_kernels             = True
+    # Fuse permute/transpose ops into adjacent kernels
+    ind.permute_fusion            = True
+    # Group similar operations for fusion
+    ind.group_fusion              = True
+    # Benchmark fusion choices instead of heuristics
+    ind.benchmark_fusion          = True
 
 
 def optimize_model(model: torch.nn.Module) -> torch.nn.Module:
@@ -279,8 +285,6 @@ def make_generate_fn(
         past_key_values = None
         ttft_ms: Optional[float] = None
 
-        # Disable GC during the tight decode loop to avoid stalls
-        gc.disable()
         t_start = time.perf_counter()
 
         for step in range(MAX_NEW_TOKENS):
@@ -319,9 +323,6 @@ def make_generate_fn(
             # Skip EOS check when SKIP_EARLY_STOP=True (saves a Python conditional per step)
             if step >= min_new - 1 and next_token.item() == eos_token_id:
                 break
-
-        # Re-enable GC after decode loop
-        gc.enable()
 
         return generated, {"ttft_ms": ttft_ms}
 
