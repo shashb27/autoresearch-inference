@@ -288,10 +288,15 @@ def make_generate_fn(
 
     # CUDA graph for decode step
     cuda_graph = None
-    static_logits = None
+    static_next_token = None
 
     def _decode_one_token(input_ids, cache_position, past_key_values):
-        """Single decode step — will be captured as CUDA graph."""
+        """Single decode step with self-feeding — captured as CUDA graph.
+
+        Includes argmax + copy-back so the graph is fully self-contained:
+        after replay, input_ids already holds the next token for the next replay,
+        and cache_position is incremented.
+        """
         outputs = model(
             input_ids,
             cache_position=cache_position,
@@ -299,13 +304,18 @@ def make_generate_fn(
             use_cache=True,
             return_dict=True,
         )
-        return outputs.logits
+        next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        # Self-feed: output token becomes next input
+        input_ids.copy_(next_token)
+        # Advance cache position for next step
+        cache_position.add_(1)
+        return next_token
 
     @torch.inference_mode()
     def generate_fn(
         input_ids: torch.Tensor,
     ) -> Tuple[torch.Tensor, Dict]:
-        nonlocal cuda_graph, static_logits
+        nonlocal cuda_graph, static_next_token
 
         input_ids = input_ids.to(DEVICE)
         seq_len = input_ids.shape[1]
@@ -332,48 +342,60 @@ def make_generate_fn(
 
         # Build output token list
         generated_tokens = [next_token]
-        cur_pos = seq_len
 
-        # === DECODE (fixed shape, use CUDA graph if available) ===
-        for step in range(1, MAX_NEW_TOKENS):
-            static_input_ids.copy_(next_token)
-            static_cache_position.fill_(cur_pos)
+        # Set up decode: seed static buffers
+        static_input_ids.copy_(next_token)
+        static_cache_position.fill_(seq_len)
 
-            if cuda_graph is not None:
-                # Replay captured graph
-                cuda_graph.replay()
-                next_token = static_logits[:, -1, :].argmax(dim=-1, keepdim=True)
-            else:
-                # Try to capture CUDA graph on first decode step
-                try:
-                    # Warmup run (required before capture)
-                    s = torch.cuda.Stream()
-                    s.wait_stream(torch.cuda.current_stream())
-                    with torch.cuda.stream(s):
-                        static_logits = _decode_one_token(
-                            static_input_ids, static_cache_position, static_cache
-                        )
-                    torch.cuda.current_stream().wait_stream(s)
-
-                    # Capture
-                    cuda_graph = torch.cuda.CUDAGraph()
-                    with torch.cuda.graph(cuda_graph):
-                        static_logits = _decode_one_token(
-                            static_input_ids, static_cache_position, static_cache
-                        )
-
-                    # First actual decode
-                    cuda_graph.replay()
-                    next_token = static_logits[:, -1, :].argmax(dim=-1, keepdim=True)
-                except Exception:
-                    # Fall back to non-graph decode
-                    logits = _decode_one_token(
+        # === DECODE (fixed shape, CUDA graph) ===
+        if cuda_graph is None:
+            # First call: warmup + capture
+            try:
+                # Warmup run (required before capture)
+                s = torch.cuda.Stream()
+                s.wait_stream(torch.cuda.current_stream())
+                with torch.cuda.stream(s):
+                    _ = _decode_one_token(
                         static_input_ids, static_cache_position, static_cache
                     )
-                    next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+                torch.cuda.current_stream().wait_stream(s)
 
-            generated_tokens.append(next_token)
-            cur_pos += 1
+                # Reset position for capture (warmup advanced it)
+                static_input_ids.copy_(next_token)
+                static_cache_position.fill_(seq_len)
+
+                # Capture
+                cuda_graph = torch.cuda.CUDAGraph()
+                with torch.cuda.graph(cuda_graph):
+                    static_next_token = _decode_one_token(
+                        static_input_ids, static_cache_position, static_cache
+                    )
+            except Exception:
+                cuda_graph = None
+
+        if cuda_graph is not None:
+            # Reset for actual generation (capture advanced buffers)
+            static_input_ids.copy_(next_token)
+            static_cache_position.fill_(seq_len)
+
+            for step in range(1, MAX_NEW_TOKENS):
+                cuda_graph.replay()
+                # static_next_token is updated in-place by the graph
+                # static_input_ids already has the next token (self-feeding)
+                # static_cache_position already incremented
+                generated_tokens.append(static_next_token.clone())
+        else:
+            # Fallback: no CUDA graph
+            cur_pos = seq_len
+            past_key_values = static_cache
+            for step in range(1, MAX_NEW_TOKENS):
+                static_input_ids.copy_(next_token)
+                static_cache_position.fill_(cur_pos)
+                next_token = _decode_one_token(
+                    static_input_ids, static_cache_position, past_key_values
+                )
+                generated_tokens.append(next_token)
+                cur_pos += 1
 
         # Reconstruct full output
         all_tokens = torch.cat([input_ids] + generated_tokens, dim=-1)
