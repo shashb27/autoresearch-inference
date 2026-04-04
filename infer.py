@@ -74,7 +74,7 @@ ATTENTION_IMPLEMENTATION: str = "eager"   # "sdpa" | "flash_attention_2" | "eage
 
 # --- Compilation ---
 USE_TORCH_COMPILE: bool  = True
-COMPILE_MODE: str        = "default"     # "default" | "reduce-overhead" | "max-autotune"
+COMPILE_MODE: str        = "reduce-overhead"     # "default" | "reduce-overhead" | "max-autotune"
 COMPILE_BACKEND: str     = "inductor"
 # Separate prefill vs decode compile modes (only effective when USE_SPLIT_COMPILE=True)
 USE_SPLIT_COMPILE: bool  = False
