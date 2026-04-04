@@ -36,6 +36,10 @@ torch._dynamo.config.guard_nn_modules = False
 
 # Enable TF32 for float32 matmuls (uses tensor cores)
 torch.set_float32_matmul_precision('high')
+# Allow reduced precision accumulation in BF16 matmuls (faster on tensor cores)
+torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
+# Enable cuDNN auto-tuning for convolutional layers
+torch.backends.cudnn.benchmark = True
 
 from prepare import benchmark
 
