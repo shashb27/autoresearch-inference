@@ -173,6 +173,8 @@ def _apply_inductor_configs() -> None:
     # Aggressive kernel fusion to reduce launch overhead
     ind.aggressive_fusion         = True
     ind.combo_kernels             = True
+    # Try epilogue fusion first for potentially better fusion choices
+    ind.epilogue_fusion_first     = True
 
 
 def optimize_model(model: torch.nn.Module) -> torch.nn.Module:
@@ -273,9 +275,6 @@ def make_generate_fn(
     # Maximum possible sequence length (longest prompt + MAX_NEW_TOKENS)
     MAX_SEQ_LEN = 512  # prompts are at most ~200 tokens + 256 new tokens
 
-    # Use high-priority CUDA stream for inference
-    inference_stream = torch.cuda.Stream(device=DEVICE, priority=-1)  # -1 = high priority
-
     # Pre-allocate static cache for CUDA graph compatibility
     static_cache = StaticCache(
         config=model.config,
@@ -360,7 +359,8 @@ def make_generate_fn(
         if cuda_graph is None:
             # First call: warmup + capture on high-priority stream
             try:
-                s = torch.cuda.Stream(device=DEVICE, priority=-1)
+                # Warmup run on side stream (required before CUDA graph capture)
+                s = torch.cuda.Stream(device=DEVICE)
                 s.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(s):
                     _ = _decode_one_token(
@@ -372,9 +372,9 @@ def make_generate_fn(
                 static_input_ids.copy_(next_token)
                 static_cache_position.fill_(seq_len)
 
-                # Capture on high-priority stream
+                # Capture on default stream (ensures replay + output writes are ordered)
                 cuda_graph = torch.cuda.CUDAGraph()
-                with torch.cuda.graph(cuda_graph, stream=inference_stream):
+                with torch.cuda.graph(cuda_graph):
                     static_next_token = _decode_one_token(
                         static_input_ids, static_cache_position, static_cache
                     )
