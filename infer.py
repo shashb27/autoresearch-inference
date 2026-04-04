@@ -296,12 +296,19 @@ def make_generate_fn(
     # Pre-allocated output buffer (avoids clone/append/cat per step)
     output_buffer = torch.empty(1, MAX_SEQ_LEN, dtype=torch.long, device=DEVICE)
 
+    # Write position for output buffer (inside CUDA graph)
+    static_write_pos = torch.zeros(1, dtype=torch.long, device=DEVICE)
+
     # CUDA graph for decode step
     cuda_graph = None
     static_next_token = None
 
-    def _decode_one_token(input_ids, cache_position, past_key_values):
-        """Single decode step with self-feeding — captured as CUDA graph."""
+    def _decode_one_token(input_ids, cache_position, past_key_values, out_buf, write_pos):
+        """Single decode step — fully self-contained for CUDA graph.
+
+        Includes: model forward → argmax → self-feed → write output → advance positions.
+        After replay, NO Python operations needed except the loop itself.
+        """
         outputs = model(
             input_ids,
             cache_position=cache_position,
@@ -311,7 +318,11 @@ def make_generate_fn(
         )
         next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
         input_ids.copy_(next_token)
+        # Write token to output buffer at current write position
+        out_buf.index_copy_(1, write_pos, next_token)
+        # Advance all positions
         cache_position.add_(1)
+        write_pos.add_(1)
         return next_token
 
     @torch.inference_mode()
@@ -349,47 +360,57 @@ def make_generate_fn(
         output_buffer[:, seq_len:seq_len + 1] = next_token
         static_input_ids.copy_(next_token)
         static_cache_position.fill_(seq_len)
+        # Write position starts right after the first generated token
+        static_write_pos.fill_(seq_len + 1)
 
         # === DECODE with per-step CUDA graph ===
         if cuda_graph is None:
             try:
-                # Multiple warmup iterations for better compiled kernels
+                # Warmup
                 s = torch.cuda.Stream(device=DEVICE)
                 s.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(s):
                     for _ in range(3):
                         _ = _decode_one_token(
-                            static_input_ids, static_cache_position, static_cache
+                            static_input_ids, static_cache_position,
+                            static_cache, output_buffer, static_write_pos
                         )
                 torch.cuda.current_stream().wait_stream(s)
 
+                # Reset for capture
                 static_input_ids.copy_(next_token)
                 static_cache_position.fill_(seq_len)
+                static_write_pos.fill_(seq_len + 1)
 
                 cuda_graph = torch.cuda.CUDAGraph()
                 with torch.cuda.graph(cuda_graph):
                     static_next_token = _decode_one_token(
-                        static_input_ids, static_cache_position, static_cache
+                        static_input_ids, static_cache_position,
+                        static_cache, output_buffer, static_write_pos
                     )
             except Exception:
                 cuda_graph = None
 
         if cuda_graph is not None:
+            # Reset for actual generation
             static_input_ids.copy_(next_token)
             static_cache_position.fill_(seq_len)
+            static_write_pos.fill_(seq_len + 1)
 
+            # Pure replay loop — all work is inside the graph
             for step in range(1, MAX_NEW_TOKENS):
                 cuda_graph.replay()
-                output_buffer[:, seq_len + step:seq_len + step + 1] = static_next_token
         else:
+            # Fallback
             cur_pos = seq_len
             for step in range(1, MAX_NEW_TOKENS):
                 static_input_ids.copy_(next_token)
                 static_cache_position.fill_(cur_pos)
+                static_write_pos.fill_(cur_pos + 1)
                 next_token = _decode_one_token(
-                    static_input_ids, static_cache_position, static_cache
+                    static_input_ids, static_cache_position,
+                    static_cache, output_buffer, static_write_pos
                 )
-                output_buffer[:, cur_pos + 1:cur_pos + 2] = next_token
                 cur_pos += 1
 
         total_len = seq_len + MAX_NEW_TOKENS
