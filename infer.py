@@ -173,6 +173,9 @@ def _apply_inductor_configs() -> None:
     # Aggressive kernel fusion to reduce launch overhead
     ind.aggressive_fusion         = True
     ind.combo_kernels             = True
+    # Enable Triton-level CUDA graph trees for reduced launch overhead
+    ind.triton.cudagraph_trees    = True
+    ind.triton.cudagraphs         = True
 
 
 def optimize_model(model: torch.nn.Module) -> torch.nn.Module:
