@@ -170,6 +170,9 @@ def _apply_inductor_configs() -> None:
     ind.epilogue_fusion           = INDUCTOR_EPILOGUE_FUSION
     ind.coordinate_descent_tuning = INDUCTOR_COORDINATE_DESCENT
     ind.shape_padding             = INDUCTOR_SHAPE_PADDING
+    # Aggressive kernel fusion to reduce launch overhead
+    ind.aggressive_fusion         = True
+    ind.combo_kernels             = True
 
 
 def optimize_model(model: torch.nn.Module) -> torch.nn.Module:
