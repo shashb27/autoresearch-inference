@@ -22,12 +22,17 @@ import json
 import time
 from typing import Callable, Dict, Optional, Tuple, Union
 
+# CUDA allocator optimization: reduce fragmentation with expandable segments
+os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
+
 import torch
 import torch._dynamo
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Allow more cache entries for varying input shapes
 torch._dynamo.config.cache_size_limit = 64
+# Reduce guard overhead for faster dispatch
+torch._dynamo.config.guard_nn_modules = False
 
 # Enable TF32 for float32 matmuls (uses tensor cores)
 torch.set_float32_matmul_precision('high')
