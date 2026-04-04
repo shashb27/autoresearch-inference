@@ -90,8 +90,8 @@ INDUCTOR_COORDINATE_DESCENT: bool      = True   # autotune Triton tile sizes (sl
 INDUCTOR_SHAPE_PADDING: bool           = True   # pad shapes for memory alignment
 
 # --- Quantization ---
-QUANTIZATION_ENABLED: bool      = False
-QUANTIZATION_TYPE: Optional[str] = None  # "int8" | "int4" | "fp8" | "nf4" | "awq" | "gptq"
+QUANTIZATION_ENABLED: bool      = True
+QUANTIZATION_TYPE: Optional[str] = "int8_wo"  # "int8_wo" | "int4" | "fp8" | "nf4" | "awq" | "gptq"
 
 # --- Generation loop ---
 RETURN_DICT: bool      = False  # False = return tuple, avoids dict construction overhead
@@ -143,6 +143,13 @@ def load_model() -> torch.nn.Module:
         attn_implementation=ATTENTION_IMPLEMENTATION,
     )
     model.eval()
+
+    # Apply quantization if enabled
+    if QUANTIZATION_ENABLED and QUANTIZATION_TYPE == "int8_wo":
+        from torchao.quantization import quantize_, Int8WeightOnlyConfig
+        quantize_(model, Int8WeightOnlyConfig())
+        print("  Applied INT8 weight-only quantization")
+
     return model
 
 
