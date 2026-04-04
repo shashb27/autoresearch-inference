@@ -69,7 +69,7 @@ MAX_NEW_TOKENS: int = _CFG.get("max_new_tokens", 256)
 # The agent changes these — one or a few per experiment.
 
 # --- Dtype & attention ---
-DTYPE = torch.bfloat16
+DTYPE = torch.float16
 ATTENTION_IMPLEMENTATION: str = "eager"   # "sdpa" | "flash_attention_2" | "eager"
 
 # --- Compilation ---
@@ -173,9 +173,6 @@ def _apply_inductor_configs() -> None:
     # Aggressive kernel fusion to reduce launch overhead
     ind.aggressive_fusion         = True
     ind.combo_kernels             = True
-    # Enable Triton-level CUDA graph trees for reduced launch overhead
-    ind.triton.cudagraph_trees    = True
-    ind.triton.cudagraphs         = True
 
 
 def optimize_model(model: torch.nn.Module) -> torch.nn.Module:
