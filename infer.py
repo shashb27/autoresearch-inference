@@ -70,7 +70,7 @@ MAX_NEW_TOKENS: int = _CFG.get("max_new_tokens", 256)
 
 # --- Dtype & attention ---
 DTYPE = torch.bfloat16
-ATTENTION_IMPLEMENTATION: str = "sdpa"   # "sdpa" | "flash_attention_2" | "eager"
+ATTENTION_IMPLEMENTATION: str = "eager"   # "sdpa" | "flash_attention_2" | "eager"
 
 # --- Compilation ---
 USE_TORCH_COMPILE: bool  = True
@@ -196,7 +196,7 @@ def optimize_model(model: torch.nn.Module) -> torch.nn.Module:
                 model,
                 mode=COMPILE_MODE,
                 backend=COMPILE_BACKEND,
-                dynamic=True,
+                dynamic=False,
             )
 
     return model
