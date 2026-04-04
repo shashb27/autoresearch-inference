@@ -293,11 +293,8 @@ def make_generate_fn(
     cuda_graph = None
     static_next_token = None
 
-    # Pre-allocated buffer to collect decoded tokens inside CUDA graph
-    decode_output = torch.empty(MAX_NEW_TOKENS, dtype=torch.long, device=DEVICE)
-
     def _decode_one_token(input_ids, cache_position, past_key_values):
-        """Single decode step with self-feeding."""
+        """Single decode step with self-feeding — captured as CUDA graph."""
         outputs = model(
             input_ids,
             cache_position=cache_position,
@@ -310,33 +307,16 @@ def make_generate_fn(
         cache_position.add_(1)
         return next_token
 
-    def _decode_all_tokens(input_ids, cache_position, past_key_values, out_buf, n_steps):
-        """Decode n_steps tokens, writing each to out_buf. Self-feeding.
-        Entire function is captured as one CUDA graph."""
-        for i in range(n_steps):
-            outputs = model(
-                input_ids,
-                cache_position=cache_position,
-                past_key_values=past_key_values,
-                use_cache=True,
-                return_dict=True,
-            )
-            next_token = outputs.logits[:, -1, :].argmax(dim=-1, keepdim=True)
-            input_ids.copy_(next_token)
-            out_buf[i] = next_token.squeeze()
-            cache_position.add_(1)
-
     @torch.inference_mode()
     def generate_fn(
         input_ids: torch.Tensor,
     ) -> Tuple[torch.Tensor, Dict]:
-        nonlocal cuda_graph
+        nonlocal cuda_graph, static_next_token
 
         input_ids = input_ids.to(DEVICE)
         seq_len = input_ids.shape[1]
-        n_decode = MAX_NEW_TOKENS - 1  # first token from prefill
 
-        # Reset the static cache for this generation
+        # Reset the static cache
         static_cache.reset()
 
         # Copy input to pre-allocated output buffer
@@ -344,7 +324,7 @@ def make_generate_fn(
 
         t_start = time.perf_counter()
 
-        # === PREFILL (variable length, no CUDA graph) ===
+        # === PREFILL ===
         cache_position = torch.arange(seq_len, dtype=torch.long, device=DEVICE)
         prefill_out = model(
             input_ids,
@@ -359,57 +339,40 @@ def make_generate_fn(
             torch.cuda.synchronize()
         ttft_ms = (time.perf_counter() - t_start) * 1000
 
-        # Write first generated token
         output_buffer[:, seq_len:seq_len + 1] = next_token
-
-        # === DECODE: all remaining tokens in one CUDA graph ===
         static_input_ids.copy_(next_token)
         static_cache_position.fill_(seq_len)
 
+        # === DECODE with per-step CUDA graph ===
         if cuda_graph is None:
             try:
-                # Warmup
                 s = torch.cuda.Stream(device=DEVICE)
                 s.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(s):
-                    _decode_all_tokens(
-                        static_input_ids, static_cache_position,
-                        static_cache, decode_output, n_decode,
+                    _ = _decode_one_token(
+                        static_input_ids, static_cache_position, static_cache
                     )
                 torch.cuda.current_stream().wait_stream(s)
 
-                # Reset for capture
                 static_input_ids.copy_(next_token)
                 static_cache_position.fill_(seq_len)
-                static_cache.reset()
-                # Re-run prefill to restore cache state
-                with torch.no_grad():
-                    model(input_ids, cache_position=torch.arange(seq_len, dtype=torch.long, device=DEVICE),
-                          past_key_values=static_cache, use_cache=True, return_dict=True)
 
-                # Capture ALL decode steps as one graph
                 cuda_graph = torch.cuda.CUDAGraph()
                 with torch.cuda.graph(cuda_graph):
-                    _decode_all_tokens(
-                        static_input_ids, static_cache_position,
-                        static_cache, decode_output, n_decode,
+                    static_next_token = _decode_one_token(
+                        static_input_ids, static_cache_position, static_cache
                     )
-            except Exception as e:
-                print(f"CUDA graph capture failed: {e}")
+            except Exception:
                 cuda_graph = None
 
         if cuda_graph is not None:
-            # Reset buffers for actual generation
             static_input_ids.copy_(next_token)
             static_cache_position.fill_(seq_len)
 
-            # Single replay generates ALL 255 decode tokens
-            cuda_graph.replay()
-
-            # Copy decoded tokens to output buffer
-            output_buffer[0, seq_len + 1:seq_len + 1 + n_decode] = decode_output[:n_decode]
+            for step in range(1, MAX_NEW_TOKENS):
+                cuda_graph.replay()
+                output_buffer[:, seq_len + step:seq_len + step + 1] = static_next_token
         else:
-            # Fallback: sequential decode
             cur_pos = seq_len
             for step in range(1, MAX_NEW_TOKENS):
                 static_input_ids.copy_(next_token)
