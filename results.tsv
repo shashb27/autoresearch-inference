@@ -5,3 +5,4 @@ acc91d5	262.98	7.31	3.0	keep	baseline: BF16 + SDPA + compile(dynamic=True)
 ef1c3a1	285.33	7.36	3.0	keep	+ inductor shape padding (noise, ~0%)
 98ee2a3	0.00	0.0	3.0	crash	static cache + reduce-overhead: CUDA graph tensor overwrite
 74419ad	177.12	8.21	3.0	discard	static cache + compile(default): -38% regression
+2359ea0	284.65	8.39	3.0	keep	BF16 reduced precision + cudnn benchmark (~0%)
