@@ -173,12 +173,8 @@ def _apply_inductor_configs() -> None:
     # Aggressive kernel fusion to reduce launch overhead
     ind.aggressive_fusion         = True
     ind.combo_kernels             = True
-    # Fuse permute/transpose ops into adjacent kernels
-    ind.permute_fusion            = True
-    # Group similar operations for fusion
-    ind.group_fusion              = True
-    # Benchmark fusion choices instead of heuristics
-    ind.benchmark_fusion          = True
+    # Allow larger fused kernels (default 64)
+    ind.max_fusion_size           = 128
 
 
 def optimize_model(model: torch.nn.Module) -> torch.nn.Module:
