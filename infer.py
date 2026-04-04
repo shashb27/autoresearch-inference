@@ -173,8 +173,8 @@ def _apply_inductor_configs() -> None:
     # Aggressive kernel fusion to reduce launch overhead
     ind.aggressive_fusion         = True
     ind.combo_kernels             = True
-    # Allow larger fused kernels (default 64)
-    ind.max_fusion_size           = 128
+    # Generate multiple Triton kernel implementations, dispatch best at runtime
+    ind.triton.multi_kernel       = 1
 
 
 def optimize_model(model: torch.nn.Module) -> torch.nn.Module:
