@@ -90,8 +90,8 @@ INDUCTOR_COORDINATE_DESCENT: bool      = True   # autotune Triton tile sizes (sl
 INDUCTOR_SHAPE_PADDING: bool           = True   # pad shapes for memory alignment
 
 # --- Quantization ---
-QUANTIZATION_ENABLED: bool      = True
-QUANTIZATION_TYPE: Optional[str] = "int8_wo"  # "int8_wo" | "int4" | "fp8" | "nf4" | "awq" | "gptq"
+QUANTIZATION_ENABLED: bool      = False
+QUANTIZATION_TYPE: Optional[str] = None  # "int8_wo" | "int4" | "fp8" | "nf4" | "awq" | "gptq"
 
 # --- Generation loop ---
 RETURN_DICT: bool      = False  # False = return tuple, avoids dict construction overhead
@@ -353,12 +353,14 @@ def make_generate_fn(
         # === DECODE with per-step CUDA graph ===
         if cuda_graph is None:
             try:
+                # Multiple warmup iterations for better compiled kernels
                 s = torch.cuda.Stream(device=DEVICE)
                 s.wait_stream(torch.cuda.current_stream())
                 with torch.cuda.stream(s):
-                    _ = _decode_one_token(
-                        static_input_ids, static_cache_position, static_cache
-                    )
+                    for _ in range(3):
+                        _ = _decode_one_token(
+                            static_input_ids, static_cache_position, static_cache
+                        )
                 torch.cuda.current_stream().wait_stream(s)
 
                 static_input_ids.copy_(next_token)
