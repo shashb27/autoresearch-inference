@@ -27,7 +27,7 @@ os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
 
 import torch
 import torch._dynamo
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, StaticCache
 
 # Allow more cache entries for varying input shapes
 torch._dynamo.config.cache_size_limit = 64
@@ -270,84 +270,114 @@ def make_generate_fn(
     #     # 4. Repeat until MAX_NEW_TOKENS reached
     #     ...
 
-    # Use HuggingFace's generate() with static cache for optimized generation
-    USE_HF_GENERATE = True
+    # Maximum possible sequence length (longest prompt + MAX_NEW_TOKENS)
+    MAX_SEQ_LEN = 512  # prompts are at most ~200 tokens + 256 new tokens
 
-    if USE_HF_GENERATE:
-        @torch.inference_mode()
-        def generate_fn(
-            input_ids: torch.Tensor,
-        ) -> Tuple[torch.Tensor, Dict]:
-            input_ids = input_ids.to(DEVICE)
+    # Pre-allocate static cache for CUDA graph compatibility
+    static_cache = StaticCache(
+        config=model.config,
+        max_batch_size=1,
+        max_cache_len=MAX_SEQ_LEN,
+        device=DEVICE,
+        dtype=DTYPE,
+    )
 
-            t_start = time.perf_counter()
+    # Static input/output buffers for CUDA graph decode step
+    static_input_ids = torch.zeros(1, 1, dtype=torch.long, device=DEVICE)
+    static_cache_position = torch.zeros(1, dtype=torch.long, device=DEVICE)
 
-            generated = model.generate(
-                input_ids,
-                max_new_tokens=MAX_NEW_TOKENS,
-                min_new_tokens=min_new,
-                do_sample=False,
-                use_cache=True,
-                cache_implementation="static",
-            )
+    # CUDA graph for decode step
+    cuda_graph = None
+    static_logits = None
 
-            # Approximate TTFT (can't measure exactly with HF generate)
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
-            total_ms = (time.perf_counter() - t_start) * 1000
-            n_new = generated.shape[1] - input_ids.shape[1]
-            # Estimate: TTFT ≈ total_time * (prefill_fraction)
-            # For batch=1 decode-bound workloads, prefill is ~1 step out of N
-            ttft_ms = total_ms / max(n_new, 1)
+    def _decode_one_token(input_ids, cache_position, past_key_values):
+        """Single decode step — will be captured as CUDA graph."""
+        outputs = model(
+            input_ids,
+            cache_position=cache_position,
+            past_key_values=past_key_values,
+            use_cache=True,
+            return_dict=True,
+        )
+        return outputs.logits
 
-            return generated, {"ttft_ms": ttft_ms}
-    else:
-        @torch.inference_mode()
-        def generate_fn(
-            input_ids: torch.Tensor,
-        ) -> Tuple[torch.Tensor, Dict]:
-            input_ids = input_ids.to(DEVICE)
-            generated = input_ids
-            past_key_values = None
-            ttft_ms: Optional[float] = None
+    @torch.inference_mode()
+    def generate_fn(
+        input_ids: torch.Tensor,
+    ) -> Tuple[torch.Tensor, Dict]:
+        nonlocal cuda_graph, static_logits
 
-            t_start = time.perf_counter()
+        input_ids = input_ids.to(DEVICE)
+        seq_len = input_ids.shape[1]
 
-            for step in range(MAX_NEW_TOKENS):
-                if past_key_values is None:
-                    outputs = model(
-                        generated,
-                        use_cache=True,
-                        return_dict=RETURN_DICT,
+        # Reset the static cache for this generation
+        static_cache.reset()
+
+        t_start = time.perf_counter()
+
+        # === PREFILL (variable length, no CUDA graph) ===
+        cache_position = torch.arange(seq_len, dtype=torch.long, device=DEVICE)
+        prefill_out = model(
+            input_ids,
+            cache_position=cache_position,
+            past_key_values=static_cache,
+            use_cache=True,
+            return_dict=True,
+        )
+        next_token = prefill_out.logits[:, -1, :].argmax(dim=-1, keepdim=True)
+
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        ttft_ms = (time.perf_counter() - t_start) * 1000
+
+        # Build output token list
+        generated_tokens = [next_token]
+        cur_pos = seq_len
+
+        # === DECODE (fixed shape, use CUDA graph if available) ===
+        for step in range(1, MAX_NEW_TOKENS):
+            static_input_ids.copy_(next_token)
+            static_cache_position.fill_(cur_pos)
+
+            if cuda_graph is not None:
+                # Replay captured graph
+                cuda_graph.replay()
+                next_token = static_logits[:, -1, :].argmax(dim=-1, keepdim=True)
+            else:
+                # Try to capture CUDA graph on first decode step
+                try:
+                    # Warmup run (required before capture)
+                    s = torch.cuda.Stream()
+                    s.wait_stream(torch.cuda.current_stream())
+                    with torch.cuda.stream(s):
+                        static_logits = _decode_one_token(
+                            static_input_ids, static_cache_position, static_cache
+                        )
+                    torch.cuda.current_stream().wait_stream(s)
+
+                    # Capture
+                    cuda_graph = torch.cuda.CUDAGraph()
+                    with torch.cuda.graph(cuda_graph):
+                        static_logits = _decode_one_token(
+                            static_input_ids, static_cache_position, static_cache
+                        )
+
+                    # First actual decode
+                    cuda_graph.replay()
+                    next_token = static_logits[:, -1, :].argmax(dim=-1, keepdim=True)
+                except Exception:
+                    # Fall back to non-graph decode
+                    logits = _decode_one_token(
+                        static_input_ids, static_cache_position, static_cache
                     )
-                else:
-                    outputs = model(
-                        generated[:, -1:],
-                        past_key_values=past_key_values,
-                        use_cache=True,
-                        return_dict=RETURN_DICT,
-                    )
+                    next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
 
-                if RETURN_DICT:
-                    logits          = outputs.logits
-                    past_key_values = outputs.past_key_values
-                else:
-                    logits          = outputs[0]
-                    past_key_values = outputs[1]
+            generated_tokens.append(next_token)
+            cur_pos += 1
 
-                next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
-
-                if step == 0:
-                    if torch.cuda.is_available():
-                        torch.cuda.synchronize()
-                    ttft_ms = (time.perf_counter() - t_start) * 1000
-
-                generated = torch.cat([generated, next_token], dim=-1)
-
-                if step >= min_new - 1 and next_token.item() == eos_token_id:
-                    break
-
-            return generated, {"ttft_ms": ttft_ms}
+        # Reconstruct full output
+        all_tokens = torch.cat([input_ids] + generated_tokens, dim=-1)
+        return all_tokens, {"ttft_ms": ttft_ms}
 
     return generate_fn
 
